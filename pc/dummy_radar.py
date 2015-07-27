@@ -18,8 +18,8 @@ class Dummy_radar():
         if self.debug_enable:
             print s
 
-    def set_pa(self, on):
-        self.debug_print("set_pa {}".format(on))
+    def set_rfpower(self, on):
+        self.debug_print("set_rfpower {}".format(on))
         self.rf_power = on
 
     def set_trig(self, trig):
@@ -34,12 +34,18 @@ class Dummy_radar():
 
     def stream(self):
         f = 1000
-        t = np.linspace(0, self.sweep_length, self.bb_srate*self.sweep_length)
+        prev_l, prev_srate = None, None
         while True:
-            tstart = time.time()
-            yield np.sin(2*np.pi*f*t)
+            if prev_l != self.sweep_length or prev_srate != self.bb_srate:
+                t = np.linspace(0, self.sweep_length, self.bb_srate*self.sweep_length)
+            if self.trig != None:
+                if self.rf_power:
+                    yield np.sin(2*np.pi*f*t)
+                else:
+                    yield 0*t
+                if self.trig == 'single':
+                    self.trig = None
             time.sleep(0.01)
-            #print time.time() - tstart
             f += 100.
             if f > self.bb_srate/2.:
                 f = 1000

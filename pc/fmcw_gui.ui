@@ -44,7 +44,7 @@
     <property name="title">
      <string>Triggering</string>
     </property>
-    <widget class="QRadioButton" name="radioButton_2">
+    <widget class="QRadioButton" name="radioTrigCont">
      <property name="geometry">
       <rect>
        <x>0</x>
@@ -60,7 +60,7 @@
       <bool>false</bool>
      </property>
     </widget>
-    <widget class="QRadioButton" name="radioButton">
+    <widget class="QRadioButton" name="radioTrigSingle">
      <property name="geometry">
       <rect>
        <x>0</x>
@@ -76,11 +76,11 @@
       <bool>true</bool>
      </property>
     </widget>
-    <zorder>radioButton_2</zorder>
-    <zorder>radioButton</zorder>
+    <zorder>radioTrigCont</zorder>
+    <zorder>radioTrigSingle</zorder>
     <zorder>pushButton_2</zorder>
    </widget>
-   <widget class="QPushButton" name="pushButton">
+   <widget class="QPushButton" name="pushButtonTrigger">
     <property name="geometry">
      <rect>
       <x>640</x>
@@ -99,7 +99,7 @@
      <string>Trigger</string>
     </property>
    </widget>
-   <widget class="QCheckBox" name="checkBox">
+   <widget class="QCheckBox" name="rfpowerBox">
     <property name="geometry">
      <rect>
       <x>640</x>
@@ -286,7 +286,7 @@
      </rect>
     </property>
    </widget>
-   <widget class="QWidget" name="timePlot_area" native="true">
+   <widget class="PlotWidget" name="timeplotW" native="true">
     <property name="geometry">
      <rect>
       <x>0</x>
@@ -353,10 +353,10 @@
    </widget>
    <zorder>frame_3</zorder>
    <zorder>groupBox</zorder>
-   <zorder>pushButton</zorder>
-   <zorder>checkBox</zorder>
+   <zorder>pushButtonTrigger</zorder>
+   <zorder>rfpowerBox</zorder>
    <zorder>Waterfall_area</zorder>
-   <zorder>timePlot_area</zorder>
+   <zorder>timeplotW</zorder>
    <zorder>plotGroup</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -371,6 +371,14 @@
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PlotWidget</class>
+   <extends>QWidget</extends>
+   <header>pyqtgraph.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

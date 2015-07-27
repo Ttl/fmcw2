@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'fmcw_gui.ui'
 #
-# Created: Sun Jul 26 15:58:54 2015
+# Created: Mon Jul 27 22:21:52 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -21,21 +21,21 @@ class Ui_MainWindow(object):
         self.groupBox = QtGui.QGroupBox(self.centralwidget)
         self.groupBox.setGeometry(QtCore.QRect(640, 42, 121, 71))
         self.groupBox.setObjectName("groupBox")
-        self.radioButton_2 = QtGui.QRadioButton(self.groupBox)
-        self.radioButton_2.setGeometry(QtCore.QRect(0, 20, 116, 22))
-        self.radioButton_2.setChecked(False)
-        self.radioButton_2.setObjectName("radioButton_2")
-        self.radioButton = QtGui.QRadioButton(self.groupBox)
-        self.radioButton.setGeometry(QtCore.QRect(0, 40, 116, 22))
-        self.radioButton.setChecked(True)
-        self.radioButton.setObjectName("radioButton")
-        self.pushButton = QtGui.QPushButton(self.centralwidget)
-        self.pushButton.setGeometry(QtCore.QRect(640, 10, 85, 27))
-        self.pushButton.setMaximumSize(QtCore.QSize(395, 16777215))
-        self.pushButton.setObjectName("pushButton")
-        self.checkBox = QtGui.QCheckBox(self.centralwidget)
-        self.checkBox.setGeometry(QtCore.QRect(640, 110, 97, 22))
-        self.checkBox.setObjectName("checkBox")
+        self.radioTrigCont = QtGui.QRadioButton(self.groupBox)
+        self.radioTrigCont.setGeometry(QtCore.QRect(0, 20, 116, 22))
+        self.radioTrigCont.setChecked(False)
+        self.radioTrigCont.setObjectName("radioTrigCont")
+        self.radioTrigSingle = QtGui.QRadioButton(self.groupBox)
+        self.radioTrigSingle.setGeometry(QtCore.QRect(0, 40, 116, 22))
+        self.radioTrigSingle.setChecked(True)
+        self.radioTrigSingle.setObjectName("radioTrigSingle")
+        self.pushButtonTrigger = QtGui.QPushButton(self.centralwidget)
+        self.pushButtonTrigger.setGeometry(QtCore.QRect(640, 10, 85, 27))
+        self.pushButtonTrigger.setMaximumSize(QtCore.QSize(395, 16777215))
+        self.pushButtonTrigger.setObjectName("pushButtonTrigger")
+        self.rfpowerBox = QtGui.QCheckBox(self.centralwidget)
+        self.rfpowerBox.setGeometry(QtCore.QRect(640, 110, 97, 22))
+        self.rfpowerBox.setObjectName("rfpowerBox")
         self.frame_3 = QtGui.QFrame(self.centralwidget)
         self.frame_3.setGeometry(QtCore.QRect(630, 130, 171, 121))
         self.frame_3.setFrameShape(QtGui.QFrame.StyledPanel)
@@ -83,9 +83,9 @@ class Ui_MainWindow(object):
         self.Waterfall_area = QtGui.QWidget(self.centralwidget)
         self.Waterfall_area.setGeometry(QtCore.QRect(0, 0, 621, 511))
         self.Waterfall_area.setObjectName("Waterfall_area")
-        self.timePlot_area = QtGui.QWidget(self.centralwidget)
-        self.timePlot_area.setGeometry(QtCore.QRect(0, 520, 621, 181))
-        self.timePlot_area.setObjectName("timePlot_area")
+        self.timeplotW = PlotWidget(self.centralwidget)
+        self.timeplotW.setGeometry(QtCore.QRect(0, 520, 621, 181))
+        self.timeplotW.setObjectName("timeplotW")
         self.plotGroup = QtGui.QGroupBox(self.centralwidget)
         self.plotGroup.setGeometry(QtCore.QRect(630, 520, 120, 101))
         self.plotGroup.setObjectName("plotGroup")
@@ -114,10 +114,10 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QtGui.QApplication.translate("MainWindow", "MainWindow", None, QtGui.QApplication.UnicodeUTF8))
         self.groupBox.setTitle(QtGui.QApplication.translate("MainWindow", "Triggering", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioButton_2.setText(QtGui.QApplication.translate("MainWindow", "Continous", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioButton.setText(QtGui.QApplication.translate("MainWindow", "Single", None, QtGui.QApplication.UnicodeUTF8))
-        self.pushButton.setText(QtGui.QApplication.translate("MainWindow", "Trigger", None, QtGui.QApplication.UnicodeUTF8))
-        self.checkBox.setText(QtGui.QApplication.translate("MainWindow", "RF power", None, QtGui.QApplication.UnicodeUTF8))
+        self.radioTrigCont.setText(QtGui.QApplication.translate("MainWindow", "Continous", None, QtGui.QApplication.UnicodeUTF8))
+        self.radioTrigSingle.setText(QtGui.QApplication.translate("MainWindow", "Single", None, QtGui.QApplication.UnicodeUTF8))
+        self.pushButtonTrigger.setText(QtGui.QApplication.translate("MainWindow", "Trigger", None, QtGui.QApplication.UnicodeUTF8))
+        self.rfpowerBox.setText(QtGui.QApplication.translate("MainWindow", "RF power", None, QtGui.QApplication.UnicodeUTF8))
         self.label_4.setText(QtGui.QApplication.translate("MainWindow", "Sweep", None, QtGui.QApplication.UnicodeUTF8))
         self.label.setText(QtGui.QApplication.translate("MainWindow", "Start", None, QtGui.QApplication.UnicodeUTF8))
         self.label_2.setText(QtGui.QApplication.translate("MainWindow", "Stop", None, QtGui.QApplication.UnicodeUTF8))
@@ -130,3 +130,4 @@ class Ui_MainWindow(object):
         self.radioButton_range.setText(QtGui.QApplication.translate("MainWindow", "Range", None, QtGui.QApplication.UnicodeUTF8))
         self.radioButton_none.setText(QtGui.QApplication.translate("MainWindow", "None", None, QtGui.QApplication.UnicodeUTF8))
 
+from pyqtgraph import PlotWidget

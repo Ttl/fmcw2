@@ -12,12 +12,15 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from multiprocessing import Process, Queue
 
+import PySide
 import pyqtgraph as pg
 
 matplotlib.use('Qt4Agg')
 matplotlib.rcParams['backend.qt4']='PySide'
 
 pg.setConfigOptions(antialias=True)
+
+use_multiprocessing = False
 
 class MatplotlibWidget(FigureCanvas):
     def __init__(self, parent=None,xlabel='x',ylabel='y'):
@@ -56,15 +59,19 @@ class Runner(QtCore.QThread):
 
     def run(self):
         queue = Queue()
-        self.p = Process(target=radar_streamer, args=(queue, self.job_input))
-        #Closes the process when application closes
-        self.p.daemon = True
-        self.p.start()
-        while True:
-            msg = queue.get()
-            self.message.emit(msg)
-            #Time for updating the GUI
-            time.sleep(1/60.)
+        if use_multiprocessing:
+            self.p = Process(target=radar_streamer, args=(queue, self.job_input))
+            #Closes the process when application closes
+            self.p.daemon = True
+            self.p.start()
+            while True:
+                msg = queue.get()
+                self.message.emit(msg)
+                #Time for updating the GUI
+                time.sleep(1/60.)
+        else:
+            for sample in radar.stream():
+                self.message.emit(sample)
 
     def stop(self):
         if self.p:
@@ -88,6 +95,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.stopSpinBox.valueChanged.connect(self.set_sweep)
         self.lengthSpinBox.valueChanged.connect(self.set_sweep)
 
+        #Make sure radar and GUI have same settings
+        self.set_sweep()
+
         #Initialize time plot
         self.setupPlot()
 
@@ -95,6 +105,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.radioButton_range.toggled.connect(self.set_timeplot)
         self.radioButton_time.toggled.connect(self.set_timeplot)
         self.radioButton_none.toggled.connect(self.set_timeplot)
+
+        self.radioTrigSingle.toggled.connect(self.set_trig)
+        self.radioTrigCont.toggled.connect(self.set_trig)
+        self.pushButtonTrigger.clicked.connect(self.trigger_once)
+
+        self.rfpowerBox.toggled.connect(self.set_rfpower)
+
         self.set_timeplot()
 
         self.addWorker(Runner(self.radar))
@@ -106,31 +123,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         worker.finished.connect(self.workersFinished)
         self.threads.append(worker)
 
+    def set_trig(self):
+        trig = None
+        if self.radioTrigSingle.isChecked():
+            #Disable triggering
+            trig = None
+        elif self.radioTrigCont.isChecked():
+            trig = 'cont'
+        self.radar.set_trig(trig)
+
+    def trigger_once(self):
+        self.radar.set_trig('single')
+
     def set_timeplot(self):
         """Change time plot configuration"""
         self.lines = None
         if self.radioButton_none.isChecked():
             self.timeplot_type = "none"
-            self.timeplot.axes.clear()
-            self.timeplot.draw()
         if self.radioButton_range.isChecked():
             self.timeplot_type = "range"
         if self.radioButton_time.isChecked():
             self.timeplot_type = "time"
 
-
     def setupPlot(self):
-        # create a matplotlib widget
-        self.timeplot = MatplotlibWidget()
-        # create a layout inside the blank widget and add the matplotlib widget
-        layout = QVBoxLayout(self.timePlot_area)
-        layout.addWidget(self.timeplot, 1)
-
-        self.timeplot.axes.plot([0],[0],'b-')
-        self.timeplot.draw()
-        self.timeplot.axes.set_axis_bgcolor('w')
-        self.timeplot.figure.patch.set_facecolor('white')
-        self.timeplot.figure.patch.set_alpha(1.0)
+        # Create small plot
+        self.timeplot = self.timeplotW.plot()
+        self.timeplot.setPen((200,200,100))
 
     @QtCore.Slot(list)
     def plotTimePoints(self, y):
@@ -138,32 +156,35 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         if self.timeplot_type == "range":
             y = 20*np.log10(fft(y))
-        if self.lines == None:
-            self.timeplot.axes.clear()
+        if self.lines == None or len(y) != len(self.timeplotx):
+            self.lines = True
+            print "Set axes"
             if self.timeplot_type == "time":
-                new_x = np.linspace(0, self.radar.sweep_length, len(y))
-                self.timeplot.axes.set_ylim(-1,1)
-                self.timeplot.axes.set_xlim(0,self.radar.sweep_length)
+                new_x = np.linspace(0, 1000*len(y)/self.radar.bb_srate, len(y))
+                self.timeplotW.setYRange(-1, 1)
+                self.timeplotW.setXRange(0, 1000*len(y)/self.radar.bb_srate)
             elif self.timeplot_type == "range":
-                new_x = np.linspace(0, len(y)/self.radar.sweep_length, len(y))
-                self.timeplot.axes.set_ylim(-30,100)
-                self.timeplot.axes.set_xlim(0,new_x[-1]/2.)
-            self.lines, = self.timeplot.axes.plot(new_x,y,'b-')
-            self.timeplot.draw()
-        else:
-            self.lines.set_ydata(y)
-            self.timeplot.axes.draw_artist(self.timeplot.axes.patch)
-            self.timeplot.axes.draw_artist(self.lines)
-            self.timeplot.figure.canvas.update()
-            self.timeplot.figure.canvas.flush_events()
-        self.timeplot.draw()
+                new_x = np.linspace(0, self.radar.bb_srate/2., len(y))
+                self.timeplotW.setYRange(-30, 100)
+                self.timeplotW.setXRange(0, new_x[-1])
+            self.timeplotx = new_x
+        try:
+            self.timeplot.setData(x=self.timeplotx, y=y)
+        except Exception:
+            self.timeplot = self.timeplotW.plot(x=self.timeplotx, y=y)
 
+    def set_rfpower(self):
+        power = self.rfpowerBox.isChecked()
+        self.radar.set_rfpower(power)
 
     def set_sweep(self):
-        start = self.startSpinBox.value()
-        stop = self.stopSpinBox.value()
-        length = self.lengthSpinBox.value()
+        #Fix units
+        start = self.startSpinBox.value()*1e9
+        stop = self.stopSpinBox.value()*1e9
+        length = self.lengthSpinBox.value()*1e-3
         self.radar.set_sweep(start, stop, length)
+        #Reset plot
+        self.lines = None
 
     def startWorkers(self):
         for worker in self.threads:
