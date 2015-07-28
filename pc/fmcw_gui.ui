@@ -276,7 +276,7 @@
      </property>
     </widget>
    </widget>
-   <widget class="QWidget" name="Waterfall_area" native="true">
+   <widget class="PlotWidget" name="rangeplotW" native="true">
     <property name="geometry">
      <rect>
       <x>0</x>
@@ -334,7 +334,7 @@
       </rect>
      </property>
      <property name="text">
-      <string>Range</string>
+      <string>Frequency</string>
      </property>
     </widget>
     <widget class="QRadioButton" name="radioButton_none">
@@ -355,7 +355,7 @@
    <zorder>groupBox</zorder>
    <zorder>pushButtonTrigger</zorder>
    <zorder>rfpowerBox</zorder>
-   <zorder>Waterfall_area</zorder>
+   <zorder>rangeplotW</zorder>
    <zorder>timeplotW</zorder>
    <zorder>plotGroup</zorder>
   </widget>

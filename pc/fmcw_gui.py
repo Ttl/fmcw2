@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'fmcw_gui.ui'
 #
-# Created: Mon Jul 27 22:21:52 2015
+# Created: Tue Jul 28 18:30:25 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -80,9 +80,9 @@ class Ui_MainWindow(object):
         self.label_7 = QtGui.QLabel(self.frame_3)
         self.label_7.setGeometry(QtCore.QRect(130, 90, 21, 17))
         self.label_7.setObjectName("label_7")
-        self.Waterfall_area = QtGui.QWidget(self.centralwidget)
-        self.Waterfall_area.setGeometry(QtCore.QRect(0, 0, 621, 511))
-        self.Waterfall_area.setObjectName("Waterfall_area")
+        self.rangeplotW = PlotWidget(self.centralwidget)
+        self.rangeplotW.setGeometry(QtCore.QRect(0, 0, 621, 511))
+        self.rangeplotW.setObjectName("rangeplotW")
         self.timeplotW = PlotWidget(self.centralwidget)
         self.timeplotW.setGeometry(QtCore.QRect(0, 520, 621, 181))
         self.timeplotW.setObjectName("timeplotW")
@@ -127,7 +127,7 @@ class Ui_MainWindow(object):
         self.label_7.setText(QtGui.QApplication.translate("MainWindow", "ms", None, QtGui.QApplication.UnicodeUTF8))
         self.plotGroup.setTitle(QtGui.QApplication.translate("MainWindow", "Plot", None, QtGui.QApplication.UnicodeUTF8))
         self.radioButton_time.setText(QtGui.QApplication.translate("MainWindow", "Time", None, QtGui.QApplication.UnicodeUTF8))
-        self.radioButton_range.setText(QtGui.QApplication.translate("MainWindow", "Range", None, QtGui.QApplication.UnicodeUTF8))
+        self.radioButton_range.setText(QtGui.QApplication.translate("MainWindow", "Frequency", None, QtGui.QApplication.UnicodeUTF8))
         self.radioButton_none.setText(QtGui.QApplication.translate("MainWindow", "None", None, QtGui.QApplication.UnicodeUTF8))
 
 from pyqtgraph import PlotWidget

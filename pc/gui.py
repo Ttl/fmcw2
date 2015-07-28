@@ -141,7 +141,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.radioButton_none.isChecked():
             self.timeplot_type = "none"
         if self.radioButton_range.isChecked():
-            self.timeplot_type = "range"
+            self.timeplot_type = "freq"
         if self.radioButton_time.isChecked():
             self.timeplot_type = "time"
 
@@ -149,21 +149,33 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Create small plot
         self.timeplot = self.timeplotW.plot()
         self.timeplot.setPen((200,200,100))
+        self.timeplotW.setLabel('bottom', 'Time', 's')
+        self.timeplotW.setLabel('left', 'Voltage', 'V')
+        # Create big plot
+        self.rangeplot = self.rangeplotW.plot()
+        self.timeplot.setPen((200,200,100))
+        self.rangeplotW.setLabel('bottom', 'Distance', 'm')
+        self.rangeplotW.setLabel('left', 'Power', 'dB')
+        self.last_settings = None
 
-    @QtCore.Slot(list)
-    def plotTimePoints(self, y):
+    def update_timeplot(self, y, ffty):
+        """Update the small plot"""
         if self.timeplot_type == "none":
             return
-        if self.timeplot_type == "range":
-            y = 20*np.log10(fft(y))
+        if self.timeplot_type == "freq":
+            y = ffty
+            self.timeplotW.setLabel('bottom', 'Frequency', 'Hz')
+            self.timeplotW.setLabel('left', 'Power', 'dB')
+        if self.timeplot_type == "time":
+            self.timeplotW.setLabel('bottom', 'Time', 's')
+            self.timeplotW.setLabel('left', 'Voltage', 'V')
         if self.lines == None or len(y) != len(self.timeplotx):
             self.lines = True
-            print "Set axes"
             if self.timeplot_type == "time":
                 new_x = np.linspace(0, 1000*len(y)/self.radar.bb_srate, len(y))
                 self.timeplotW.setYRange(-1, 1)
                 self.timeplotW.setXRange(0, 1000*len(y)/self.radar.bb_srate)
-            elif self.timeplot_type == "range":
+            elif self.timeplot_type == "freq":
                 new_x = np.linspace(0, self.radar.bb_srate/2., len(y))
                 self.timeplotW.setYRange(-30, 100)
                 self.timeplotW.setXRange(0, new_x[-1])
@@ -171,7 +183,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         try:
             self.timeplot.setData(x=self.timeplotx, y=y)
         except Exception:
+            self.timeplotW.clear()
             self.timeplot = self.timeplotW.plot(x=self.timeplotx, y=y)
+
+    def update_rangeplot(self, ffty):
+        """Update big plot"""
+        #d = c f tramp/(2 bw)
+        bw = abs(self.radar.fstart-self.radar.fstop)
+        tramp = self.radar.sweep_length
+        c = 299792458
+        if (bw,tramp, len(ffty)) != self.last_settings or self.rangeplotx == None:
+            distance = lambda f: c*f*tramp/(2*bw)
+            self.rangeplotx = np.linspace(0, distance(self.radar.bb_srate/2.), len(ffty))
+            self.rangeplotW.clear()
+            self.rangeplotW.setYRange(-30, 100)
+            self.rangeplotW.setLabel('bottom', 'Distance', 'm')
+            self.rangeplotW.setLabel('left', 'Power', 'dB')
+            self.rangeplot = self.rangeplotW.plot(x=self.rangeplotx, y=ffty)
+            self.last_settings = (bw, tramp, len(ffty))
+        else:
+            self.rangeplot.setData(x=self.rangeplotx, y=ffty)
+
+    @QtCore.Slot(list)
+    def plotTimePoints(self, y):
+        ffty = 20*np.log10(fft(y))
+        self.update_timeplot(y, ffty)
+        self.update_rangeplot(ffty)
 
     def set_rfpower(self):
         power = self.rfpowerBox.isChecked()
