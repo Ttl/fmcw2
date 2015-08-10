@@ -1,8 +1,14 @@
 import numpy as np
 import time
 
+
 class Dummy_radar():
+    usb_id = (None, None)
+    dummy = True
+
     def __init__(self):
+        self.name = "Dummy Radar"
+
         self.rf_power = False
         self.fstep = 0
         self.fstart = 5.5e9
@@ -13,6 +19,12 @@ class Dummy_radar():
 
         self.bb_srate = 10e6
         self.sweep_length = 0.5e-3
+
+    def connect(self):
+        return True
+
+    def disconnect(self):
+        return True
 
     def debug_print(self, s):
         if self.debug_enable:
