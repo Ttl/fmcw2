@@ -28,20 +28,13 @@ typedef enum {
 	SGPIO_DIRECTION_RX,
 	SGPIO_DIRECTION_TX,
 } sgpio_direction_t;
-	
+
 void sgpio_configure_pin_functions();
 void sgpio_test_interface();
 void sgpio_set_slice_mode(
 	const bool multi_slice
 );
-void sgpio_configure(
-	const sgpio_direction_t direction
-);
-void sgpio_cpld_stream_enable();
-void sgpio_cpld_stream_disable();
-bool sgpio_cpld_stream_is_enabled();
-
-bool sgpio_cpld_stream_rx_set_decimation(const uint_fast8_t n);
-void sgpio_cpld_stream_rx_set_q_invert(const uint_fast8_t invert);
+void sgpio_configure(void);
+void sgpio_configure_clock(uint16_t preset, uint16_t reg);
 
 #endif//__SGPIO_H__

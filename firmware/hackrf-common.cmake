@@ -53,11 +53,7 @@ if(NOT DEFINED RUN_FROM)
 	set(RUN_FROM SPIFI)
 endif()
 
-if(BOARD STREQUAL "HACKRF_ONE")
-	set(MCU_PARTNO LPC4320)
-else()
-	set(MCU_PARTNO LPC4330)
-endif()
+set(MCU_PARTNO LPC4320)
 
 if(NOT DEFINED SRC_M0)
 	set(SRC_M0 "${PATH_HACKRF_FIRMWARE_COMMON}/m0_sleep.c")
@@ -132,6 +128,8 @@ macro(DeclareTargets)
 		${SRC_M4}
 		${PATH_HACKRF_FIRMWARE_COMMON}/hackrf_core.c
 		${PATH_HACKRF_FIRMWARE_COMMON}/sgpio.c
+		${PATH_HACKRF_FIRMWARE_COMMON}/mcp4022.c
+		${PATH_HACKRF_FIRMWARE_COMMON}/rf_path.c
 		m0_bin.s
 	)
 
@@ -159,8 +157,7 @@ macro(DeclareTargets)
 		DEPENDS ${PROJECT_NAME}.bin
 		COMMAND rm -f _tmp.dfu _header.bin
 		COMMAND cp ${PROJECT_NAME}.bin _tmp.dfu
-		COMMAND dfu-suffix --vid=0x1fc9 --pid=0x000c --did=0x0 -a _tmp.dfu
-		COMMAND dfu-prefix -s 0 -a _tmp.dfu
+		COMMAND dfu-suffix --vid=0x1fc9 --pid=0x000c --did=0x0 -s 0 -a _tmp.dfu
 		COMMAND python -c \"import os.path\; import struct\; print\('0000000: da ff ' + ' '.join\(map\(lambda s: '%02x' % ord\(s\), struct.pack\('<H', os.path.getsize\('${PROJECT_NAME}.bin'\) / 512 + 1\)\)\) + ' ff ff ff ff'\)\" | xxd -g1 -r > _header.bin
 		COMMAND cat _header.bin _tmp.dfu >${PROJECT_NAME}.dfu
 		COMMAND rm -f _tmp.dfu _header.bin

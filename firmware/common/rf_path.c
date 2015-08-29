@@ -48,7 +48,7 @@ void rf_enable(void) {
     enable_adf4158();
     enable_adc();
     enable_pa();
-    //enable_mixer(); //Optional
+    enable_mixer();
 }
 
 void adf4158_write_register(uint32_t data) {

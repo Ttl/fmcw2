@@ -32,11 +32,11 @@ void baseband_streaming_enable() {
 	nvic_enable_irq(NVIC_SGPIO_IRQ);
 	SGPIO_SET_EN_1 = (1 << SGPIO_SLICE_A);
 
-	sgpio_cpld_stream_enable();
+	SGPIO_CTRL_ENABLE |= (1 << SGPIO_SLICE_M);
 }
 
 void baseband_streaming_disable() {
-	sgpio_cpld_stream_disable();
+	SGPIO_CTRL_ENABLE &= ~(1 << SGPIO_SLICE_M);
 
 	nvic_disable_irq(NVIC_SGPIO_IRQ);
 }

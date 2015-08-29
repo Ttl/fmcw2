@@ -22,5 +22,5 @@
 
 #include "usb_bulk_buffer.h"
 
-const uint32_t usb_bulk_buffer_mask = 32768 - 1;
+const uint32_t usb_bulk_buffer_size = 32768;
 volatile uint32_t usb_bulk_buffer_offset = 0;

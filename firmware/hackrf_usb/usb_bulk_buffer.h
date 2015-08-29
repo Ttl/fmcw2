@@ -31,7 +31,7 @@
  */
 extern uint8_t usb_bulk_buffer[32768];
 
-extern const uint32_t usb_bulk_buffer_mask;
+extern const uint32_t usb_bulk_buffer_size;
 
 extern volatile uint32_t usb_bulk_buffer_offset;
 

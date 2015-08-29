@@ -24,6 +24,7 @@
 
 #include <libopencm3/cm3/vector.h>
 
+#include <libopencm3/lpc43xx/scu.h>
 #include <libopencm3/lpc43xx/gpio.h>
 #include <libopencm3/lpc43xx/m4/nvic.h>
 
@@ -46,6 +47,8 @@
 #include "rf_path.h"
 #include "sgpio_isr.h"
 #include "usb_bulk_buffer.h"
+#include "sgpio.h"
+#include "mcp4022.h"
 
 static volatile transceiver_mode_t _transceiver_mode = TRANSCEIVER_MODE_OFF;
 
@@ -58,26 +61,12 @@ void set_transceiver_mode(const transceiver_mode_t new_transceiver_mode) {
 	_transceiver_mode = new_transceiver_mode;
 
 	if( _transceiver_mode == TRANSCEIVER_MODE_RX ) {
-		//gpio_clear(PORT_LED1_3, PIN_LED3);
-		//gpio_set(PORT_LED1_3, PIN_LED2);
-		usb_endpoint_init(&usb_endpoint_bulk_in);
-		//rf_path_set_direction(RF_PATH_DIRECTION_RX);
-		vector_table.irq[NVIC_SGPIO_IRQ] = sgpio_isr_rx;
+        usb_endpoint_init(&usb_endpoint_bulk_in);
 	} else if (_transceiver_mode == TRANSCEIVER_MODE_TX) {
-		//gpio_clear(PORT_LED1_3, PIN_LED2);
-		//gpio_set(PORT_LED1_3, PIN_LED3);
-		usb_endpoint_init(&usb_endpoint_bulk_out);
-		//rf_path_set_direction(RF_PATH_DIRECTION_TX);
-		vector_table.irq[NVIC_SGPIO_IRQ] = sgpio_isr_tx;
-	} else {
-		//gpio_clear(PORT_LED1_3, PIN_LED2);
-		//gpio_clear(PORT_LED1_3, PIN_LED3);
-		//rf_path_set_direction(RF_PATH_DIRECTION_OFF);
-		vector_table.irq[NVIC_SGPIO_IRQ] = sgpio_isr_rx;
+		//usb_endpoint_init(&usb_endpoint_bulk_out);
 	}
 
 	if( _transceiver_mode != TRANSCEIVER_MODE_OFF ) {
-		//si5351c_activate_best_clock_source();
 		baseband_streaming_enable();
 	}
 }
@@ -113,8 +102,8 @@ static const usb_request_handler_fn vendor_request_handler[] = {
     usb_vendor_request_read_adf4158,
     usb_vendor_request_set_gpio,
     usb_vendor_request_clear_gpio,
-    NULL,
-    NULL,
+    usb_vendor_request_set_mcp,
+    usb_vendor_request_set_clock,
     NULL,
     NULL,
 	usb_vendor_request_erase_spiflash,
@@ -142,14 +131,14 @@ usb_request_status_t usb_vendor_request(
 	const usb_transfer_stage_t stage
 ) {
 	usb_request_status_t status = USB_REQUEST_STATUS_STALL;
-	
+
 	if( endpoint->setup.request < vendor_request_handler_count ) {
 		usb_request_handler_fn handler = vendor_request_handler[endpoint->setup.request];
 		if( handler ) {
 			status = handler(endpoint, stage);
 		}
 	}
-	
+
 	return status;
 }
 
@@ -213,7 +202,7 @@ int main(void) {
 
 	usb_set_descriptor_by_serial_number();
 
-    gpio_set(PORT_LED1_3, PIN_LED1);
+    gpio_clear(PORT_LED1_3, PIN_LED1);
 
 	usb_set_configuration_changed_cb(usb_configuration_changed);
 
@@ -230,12 +219,25 @@ int main(void) {
 	usb_endpoint_init(&usb_endpoint_control_in);
 
 	nvic_set_priority(NVIC_USB0_IRQ, 255);
+    vector_table.irq[NVIC_SGPIO_IRQ] = sgpio_isr_rx;
 
 	usb_run(&usb_device);
 
 	ssp1_init();
 
-	unsigned int phase = 0;
+    sgpio_configure();
+
+    mcp_init();
+
+    /*
+    //Configure SSP1_MISO/P1_3/GPIO[0]10 (ADF4158 MUXOUT) as pin interrupt
+    SCU_PINTSEL0 = (0 << 5)|10; //GPIO[0]10
+
+	nvic_set_priority(NVIC_PIN_INT0_IRQ, 0);
+    vector_table.irq[NVIC_PIN_INT0_IRQ] = muxout_isr;
+    */
+
+	unsigned int phase = 1;
 	while(true) {
 
     //gpio_set(PORT_LED1_3, PIN_LED1);
@@ -262,7 +264,7 @@ int main(void) {
 				(transceiver_mode() == TRANSCEIVER_MODE_RX)
 				? &usb_endpoint_bulk_in : &usb_endpoint_bulk_out,
 				&usb_bulk_buffer[0x4000],
-				0x4000,
+				0x4000-8, // Last 8 bytes are unused
 				NULL, NULL
 			);
 			phase = 1;

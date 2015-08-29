@@ -22,6 +22,7 @@
  */
 
 #include "hackrf_core.h"
+#include "rf_path.h"
 #include "sgpio.h"
 #include <libopencm3/lpc43xx/i2c.h>
 #include <libopencm3/lpc43xx/cgu.h>
@@ -52,7 +53,7 @@ void cpu_clock_init(void)
 
 	//FIXME disable I2C
 	/* Kick I2C0 down to 400kHz when we switch over to APB1 clock = 204MHz */
-	i2c0_init(255);
+	//i2c0_init(255);
 
 	/*
 	 * 12MHz clock is entering LPC XTAL1/OSC input now.  On
@@ -220,17 +221,18 @@ void ssp1_init(void)
 	/*
      * Raise ADF4158 CE pin to de-select the device
 	 */
-	scu_pinmux(SCU_ADF_CE, SCU_GPIO_FAST);
-	GPIO_SET(PORT_ADF_CE) = PIN_ADF_CE;
-	GPIO_DIR(PORT_ADF_CE) |= PIN_ADF_CE;
+    gpio_clear(PORT_ADF_CE, PIN_ADF_CE);
+    gpio_clear(PORT_ADF_LE, PIN_ADF_LE);
+
 
 	/* Configure SSP1 Peripheral (to be moved later in SSP driver) */
 	scu_pinmux(SCU_SSP1_MISO, (SCU_SSP_IO | SCU_CONF_FUNCTION5));
 	scu_pinmux(SCU_SSP1_MOSI, (SCU_SSP_IO | SCU_CONF_FUNCTION5));
 	scu_pinmux(SCU_SSP1_SCK,  (SCU_SSP_IO | SCU_CONF_FUNCTION1));
+    ssp1_set_mode_16bit();
 }
 
-void ssp1_set_mode_max2837(void)
+void ssp1_set_mode_16bit(void)
 {
 	/* FIXME speed up once everything is working reliably */
 	/*
@@ -253,7 +255,7 @@ void ssp1_set_mode_max2837(void)
 		SSP_SLAVE_OUT_ENABLE);
 }
 
-void ssp1_set_mode_max5864(void)
+void ssp1_set_mode_8bit(void)
 {
 	/* FIXME speed up once everything is working reliably */
 	/*
@@ -277,9 +279,18 @@ void ssp1_set_mode_max5864(void)
 }
 
 void pin_setup(void) {
+    /* GPIO pinmuxes */
 
-	/* Configure SCU Pin Mux as GPIO */
-	scu_pinmux(SCU_PINMUX_LED1, SCU_GPIO_NOPULL);
+	scu_pinmux(SCU_PINMUX_LED1, SCU_GPIO_NOPULL | SCU_CONF_FUNCTION4);
+	scu_pinmux(SCU_ADC_NOE, SCU_GPIO_NOPULL);
+	scu_pinmux(SCU_PA_OFF, SCU_GPIO_NOPULL | SCU_CONF_FUNCTION4);
+	scu_pinmux(SCU_MIX_ENBL, SCU_GPIO_NOPULL | SCU_CONF_FUNCTION4);
+	scu_pinmux(SCU_ADF_TXDATA, SCU_GPIO_NOPULL);
+	scu_pinmux(SCU_ADF_CE, SCU_GPIO_FAST);
+	scu_pinmux(SCU_ADF_LE, SCU_GPIO_FAST);
+
+    /* Configure P2_3 as USB0_PPWR */
+	//scu_pinmux(SCU_OTG_USBV, SCU_CONF_FUNCTION7);
 
 	/* Configure all GPIO as Input (safe state) */
 	GPIO0_DIR = 0;
@@ -291,11 +302,18 @@ void pin_setup(void) {
 	GPIO6_DIR = 0;
 	GPIO7_DIR = 0;
 
-	/* Configure GPIO5[5] (P2_5) as output. */
+    rf_disable();
+
 	GPIO5_DIR |= (PIN_LED1);
 
+	GPIO0_DIR |= (PIN_ADC_NOE);
+
+    GPIO5_DIR |= (PIN_PA_OFF | PIN_MIX_ENBL);
+
+    GPIO1_DIR |= (PIN_ADF_LE | PIN_ADF_CE | PIN_ADF_TXDATA);
+
 	/* Configure SSP1 Peripheral (to be moved later in SSP driver) */
-	scu_pinmux(SCU_SSP1_MISO, (SCU_SSP_IO | SCU_CONF_FUNCTION5));
+	//scu_pinmux(SCU_SSP1_MISO, (SCU_SSP_IO | SCU_CONF_FUNCTION5));
 	scu_pinmux(SCU_SSP1_MOSI, (SCU_SSP_IO | SCU_CONF_FUNCTION5));
 	scu_pinmux(SCU_SSP1_SCK, (SCU_SSP_IO | SCU_CONF_FUNCTION1));
 	//scu_pinmux(SCU_SSP1_SSEL, (SCU_SSP_IO | SCU_CONF_FUNCTION1));

@@ -24,6 +24,5 @@
 #define __SGPIO_ISR_H__
 
 void sgpio_isr_rx();
-void sgpio_isr_tx();
 
 #endif/*__SGPIO_ISR_H__*/

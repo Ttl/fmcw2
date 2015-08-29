@@ -30,6 +30,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "sgpio.h"
+#include "sgpio_isr.h"
+#include "mcp4022.h"
+
 /*
 usb_request_status_t usb_vendor_request_write_spiflash(
 	usb_endpoint_t* const endpoint, const usb_transfer_stage_t stage)
@@ -100,6 +104,23 @@ usb_request_status_t usb_vendor_request_read_adf4158(
     return USB_REQUEST_STATUS_OK;
 }
 
+usb_request_status_t usb_vendor_request_set_mcp(
+	usb_endpoint_t* const endpoint,
+	const usb_transfer_stage_t stage
+) {
+    uint32_t data = endpoint->setup.index;
+
+	if( stage == USB_TRANSFER_STAGE_SETUP ) {
+        if (data > MCP_MAX_VALUE) {
+			return USB_REQUEST_STATUS_STALL;
+        } else {
+            mcp_set(data);
+            usb_transfer_schedule_ack(endpoint->in);
+        }
+	}
+    return USB_REQUEST_STATUS_OK;
+}
+
 usb_request_status_t usb_vendor_request_set_gpio(
 	usb_endpoint_t* const endpoint,
 	const usb_transfer_stage_t stage
@@ -121,6 +142,9 @@ usb_request_status_t usb_vendor_request_set_gpio(
         }
         if (data & BIT4) {
             gpio_set(PORT_LED1_3, PIN_LED1);
+        }
+        if (data & BIT5) {
+            sgpio_test_interface();
         }
         usb_transfer_schedule_ack(endpoint->in);
 	}
@@ -154,121 +178,29 @@ usb_request_status_t usb_vendor_request_clear_gpio(
     return USB_REQUEST_STATUS_OK;
 }
 
-/*
-usb_request_status_t usb_vendor_request_write_max2837(
-	usb_endpoint_t* const endpoint,
+
+usb_request_status_t usb_vendor_request_set_clock(
+    usb_endpoint_t* const endpoint,
+	const usb_transfer_stage_t stage
+) {
+    // Configures ADC clock
+	if( stage == USB_TRANSFER_STAGE_SETUP ) {
+        if (endpoint->setup.value > 4095) {
+            return USB_REQUEST_STATUS_STALL;
+        }
+        sgpio_configure_clock(endpoint->setup.value, endpoint->setup.index);
+        usb_transfer_schedule_ack(endpoint->in);
+	}
+    return USB_REQUEST_STATUS_OK;
+}
+
+usb_request_status_t usb_vendor_request_set_trigger(
+    usb_endpoint_t* const endpoint,
 	const usb_transfer_stage_t stage
 ) {
 	if( stage == USB_TRANSFER_STAGE_SETUP ) {
-		if( endpoint->setup.index < MAX2837_NUM_REGS ) {
-			if( endpoint->setup.value < MAX2837_DATA_REGS_MAX_VALUE ) {
-				max2837_reg_write(endpoint->setup.index, endpoint->setup.value);
-				usb_transfer_schedule_ack(endpoint->in);
-				return USB_REQUEST_STATUS_OK;
-			}
-		}
-		return USB_REQUEST_STATUS_STALL;
-	} else {
-		return USB_REQUEST_STATUS_OK;
+        //set_trigger(endpoint->setup.value, endpoint->setup.index);
+        usb_transfer_schedule_ack(endpoint->in);
 	}
+    return USB_REQUEST_STATUS_OK;
 }
-
-usb_request_status_t usb_vendor_request_read_max2837(
-	usb_endpoint_t* const endpoint,
-	const usb_transfer_stage_t stage
-) {
-	if( stage == USB_TRANSFER_STAGE_SETUP ) {
-		if( endpoint->setup.index < MAX2837_NUM_REGS ) {
-			const uint16_t value = max2837_reg_read(endpoint->setup.index);
-			endpoint->buffer[0] = value & 0xff;
-			endpoint->buffer[1] = value >> 8;
-			usb_transfer_schedule_block(endpoint->in, &endpoint->buffer, 2,
-						    NULL, NULL);
-			usb_transfer_schedule_ack(endpoint->out);
-			return USB_REQUEST_STATUS_OK;
-		}
-		return USB_REQUEST_STATUS_STALL;
-	} else {
-		return USB_REQUEST_STATUS_OK;
-	}
-}
-
-usb_request_status_t usb_vendor_request_write_si5351c(
-	usb_endpoint_t* const endpoint,
-	const usb_transfer_stage_t stage
-) {
-	if( stage == USB_TRANSFER_STAGE_SETUP ) {
-		if( endpoint->setup.index < 256 ) {
-			if( endpoint->setup.value < 256 ) {
-				si5351c_write_single(endpoint->setup.index, endpoint->setup.value);
-				usb_transfer_schedule_ack(endpoint->in);
-				return USB_REQUEST_STATUS_OK;
-			}
-		}
-		return USB_REQUEST_STATUS_STALL;
-	} else {
-		return USB_REQUEST_STATUS_OK;
-	}
-}
-
-usb_request_status_t usb_vendor_request_read_si5351c(
-	usb_endpoint_t* const endpoint,
-	const usb_transfer_stage_t stage
-) {
-	if( stage == USB_TRANSFER_STAGE_SETUP ) {
-		if( endpoint->setup.index < 256 ) {
-			const uint8_t value = si5351c_read_single(endpoint->setup.index);
-			endpoint->buffer[0] = value;
-			usb_transfer_schedule_block(endpoint->in, &endpoint->buffer, 1,
-						    NULL, NULL);
-			usb_transfer_schedule_ack(endpoint->out);
-			return USB_REQUEST_STATUS_OK;
-		}
-		return USB_REQUEST_STATUS_STALL;
-	} else {
-		return USB_REQUEST_STATUS_OK;
-	}
-}
-
-usb_request_status_t usb_vendor_request_write_rffc5071(
-	usb_endpoint_t* const endpoint,
-	const usb_transfer_stage_t stage
-) {
-	if( stage == USB_TRANSFER_STAGE_SETUP ) 
-	{
-		if( endpoint->setup.index < RFFC5071_NUM_REGS ) 
-		{
-			rffc5071_reg_write(endpoint->setup.index, endpoint->setup.value);
-			usb_transfer_schedule_ack(endpoint->in);
-			return USB_REQUEST_STATUS_OK;
-		}
-		return USB_REQUEST_STATUS_STALL;
-	} else {
-		return USB_REQUEST_STATUS_OK;
-	}
-}
-
-usb_request_status_t usb_vendor_request_read_rffc5071(
-	usb_endpoint_t* const endpoint,
-	const usb_transfer_stage_t stage
-) {
-	uint16_t value;
-	if( stage == USB_TRANSFER_STAGE_SETUP ) 
-	{
-		if( endpoint->setup.index < RFFC5071_NUM_REGS ) 
-		{
-			value = rffc5071_reg_read(endpoint->setup.index);
-			endpoint->buffer[0] = value & 0xff;
-			endpoint->buffer[1] = value >> 8;
-			usb_transfer_schedule_block(endpoint->in, &endpoint->buffer, 2,
-						    NULL, NULL);
-			usb_transfer_schedule_ack(endpoint->out);
-			return USB_REQUEST_STATUS_OK;
-		}
-		return USB_REQUEST_STATUS_STALL;
-	} else {
-		return USB_REQUEST_STATUS_OK;
-	}
-}
-
-*/

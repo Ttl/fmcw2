@@ -46,4 +46,14 @@ usb_request_status_t usb_vendor_request_clear_gpio(
 	const usb_transfer_stage_t stage
 );
 
+usb_request_status_t usb_vendor_request_set_mcp(
+	usb_endpoint_t* const endpoint,
+	const usb_transfer_stage_t stage
+);
+
+usb_request_status_t usb_vendor_request_set_clock(
+    usb_endpoint_t* const endpoint,
+	const usb_transfer_stage_t stage
+);
+
 #endif /* end of include guard: __USB_API_REGISTER_H__ */
