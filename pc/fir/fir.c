@@ -88,7 +88,7 @@ const static float taps[] = {
 -0.000493656697454,
 };
 uint32_t array_to_32(int8_t *arr) {
-    return (arr[3]<<(3*8))|(arr[2]<<(2*8))|(arr[1]<<(1*8))|(arr[0]<<(0*8));
+    return (((uint32_t)arr[3] & 0xFF)<<(3*8))|(((uint32_t)arr[2] & 0xFF)<<(2*8))|(((uint32_t)arr[1] & 0xFF)<<(1*8))|((uint32_t)arr[0] & 0xFF);
 }
 
 int gcd(int m, int n)
@@ -163,15 +163,15 @@ int main(int argc, char *argv[]) {
     int i, j;
     int fsamples;
     unsigned int stored = 0;
-    while (!feof(fin)) {
-        if ( !(read_size = fread(block8, 1, block_size - stored*2, fin)) ) {
+    uint32_t sync;
+    while (1) {
+        int read = block_size - stored*2;
+        // Read must be aligned to packet size
+        read = read - read%40;
+        if ( !(read_size = fread(block8, 1, read, fin)) ) {
             // EOF
             break;
         }
-        // Data format:
-        // 32 bytes, bits D9 - D2
-        // 4 bytes, bits D1
-        // 4 bytes, bits D0
 
         // Attach the 2 LSB bits to right samples
         int read_samples = 0;
@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) {
             for(j=0;j<31;j++) {
                 int d1 = !!(array_to_32(block8+(i*40+32)) & (1 << j));
                 int d0 = !!(array_to_32(block8+(i*40+36)) & (1 << j));
-                block[read_samples] = (block8[i*40+j]<<2) | (d1 << 1) | d0;
+                block[stored+read_samples] = (block8[i*40+j]<<2) | (d1 << 1) | d0;
                 char sign = block8[i*40+j] & (1 << 7);
                 // Sign extend
                 if (sign) {
@@ -201,7 +201,7 @@ int main(int argc, char *argv[]) {
                 for(j=0;j<decimate;j++) {
                     acc += block_filtered[i*decimate+j];
                 }
-                block_out[i] = acc;
+                block_out[i] = (int16_t)acc;
             }
             fwrite(block_out, 2, fsamples/decimate, fout);
         } else {
