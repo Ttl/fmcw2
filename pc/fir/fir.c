@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
+#include <math.h>
 
-#define BLOCK 1024*1024
+#define BLOCK 10*1024*1024
+#define PACKET_SIZE 44
 
 int decimate = 5;
 int filter = 1;
@@ -130,13 +133,27 @@ int main(int argc, char *argv[]) {
         printf("Failed to open input file: %s\n", argv[1]);
         return -1;
     }
+
     FILE *fout = fopen(argv[2], "wb");
     if (!fout) {
         printf("Failed to open output file: %s\n", argv[2]);
         return -1;
     }
 
-    unsigned int block_size = BLOCK - BLOCK%lcm(40, lcm(decimate, sizeof(taps)));
+    char *sync_file = malloc(strlen(argv[2])+10);
+    if (!sync_file) {
+        printf("malloc failed\n");
+        return -1;
+    }
+
+    sprintf(sync_file, "%s.sync", argv[2]);
+    FILE *fsync = fopen(sync_file, "wb");
+    if (!fout) {
+        printf("Failed to open sync output file: %s\n", sync_file);
+        return -1;
+    }
+
+    unsigned int block_size = BLOCK - BLOCK%lcm(PACKET_SIZE, lcm(decimate, sizeof(taps)));
     printf("Block size: %d\n", block_size);
 
     int8_t *block8 = malloc(block_size*sizeof(int8_t));
@@ -154,20 +171,28 @@ int main(int argc, char *argv[]) {
         printf("malloc failed\n");
         return -1;
     }
-    int16_t *block_out = malloc(block_size*sizeof(int16_t));
+    int16_t *block_out = malloc(2*block_size*sizeof(int16_t));
     if (!block_out) {
         printf("malloc failed\n");
         return -1;
     }
+    uint32_t *syncs = malloc(block_size*sizeof(uint32_t));
+    if (!syncs) {
+        printf("malloc failed\n");
+        return -1;
+    }
+
     int read_size;
     int i, j;
     int fsamples;
     unsigned int stored = 0;
-    uint32_t sync;
+    unsigned int sample_counter = 0;
+    unsigned int last_sync = 0;
     while (1) {
+        unsigned int sync_counter = 0;
         int read = block_size - stored*2;
         // Read must be aligned to packet size
-        read = read - read%40;
+        read = read - read%PACKET_SIZE;
         if ( !(read_size = fread(block8, 1, read, fin)) ) {
             // EOF
             break;
@@ -175,12 +200,20 @@ int main(int argc, char *argv[]) {
 
         // Attach the 2 LSB bits to right samples
         int read_samples = 0;
-        for(i=0;i<read_size/40;i++) {
+        for(i=0;i<read_size/PACKET_SIZE;i++) {
             for(j=0;j<31;j++) {
-                int d1 = !!(array_to_32(block8+(i*40+32)) & (1 << j));
-                int d0 = !!(array_to_32(block8+(i*40+36)) & (1 << j));
-                block[stored+read_samples] = (block8[i*40+j]<<2) | (d1 << 1) | d0;
-                char sign = block8[i*40+j] & (1 << 7);
+                sample_counter++;
+                // Store bits as bytes for easier access
+                uint8_t sync = !!(array_to_32(block8+(i*PACKET_SIZE+40)) & (1 << j));
+                if (sync) {
+                    syncs[sync_counter++] = sample_counter-last_sync;
+                    //printf("%d\n", sample_counter-last_sync);
+                    last_sync = sample_counter;
+                }
+                int d1 = !!(array_to_32(block8+(i*PACKET_SIZE+32)) & (1 << j));
+                int d0 = !!(array_to_32(block8+(i*PACKET_SIZE+36)) & (1 << j));
+                block[stored+read_samples] = (block8[i*PACKET_SIZE+j]<<2) | (d1 << 1) | d0;
+                char sign = block8[i*PACKET_SIZE+j] & (1 << 7);
                 // Sign extend
                 if (sign) {
                     block[stored+read_samples] |= 0xFC00;
@@ -195,24 +228,37 @@ int main(int argc, char *argv[]) {
                 block[i-fsamples] = block[i];
             }
             stored = read_samples-fsamples;
-            // Decimate
-            for(i=0;i<fsamples/decimate;i++) {
+
+            // Decimate sync words
+            for(i=0;i<sync_counter;i++) {
+                syncs[i] = (uint32_t)roundf(((double)syncs[i])/decimate);
+            }
+
+            // Decimate samples
+            int aligned_samples = fsamples/decimate;
+            for(i=0;i<aligned_samples;i++) {
                 int acc = 0;
                 for(j=0;j<decimate;j++) {
                     acc += block_filtered[i*decimate+j];
                 }
                 block_out[i] = (int16_t)acc;
             }
-            fwrite(block_out, 2, fsamples/decimate, fout);
+
+            //printf("stored %d\n", fsamples/decimate - aligned_samples);
+            fwrite(block_out, 2, aligned_samples, fout);
+            fwrite(syncs, 4, sync_counter, fsync);
         } else {
             fwrite(block, 2, read_samples, fout);
+            fwrite(syncs, 4, sync_counter, fsync);
         }
-        printf("%d %d %d\n", read_size, fsamples/decimate, stored);
+        printf("%d %d %d\n", read_size, fsamples, stored);
     }
     free(block);
     free(block_filtered);
     free(block_out);
+    free(syncs);
     fclose(fin);
     fclose(fout);
+    fclose(fsync);
     return 0;
 }
