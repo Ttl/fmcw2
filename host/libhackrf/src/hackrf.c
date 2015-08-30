@@ -755,10 +755,10 @@ int ADDCALL hackrf_set_sweep(hackrf_device* device, double fstart, double bw, do
 
     // Readback to muxout and negative bleed current
     // can't be activated simultaneously
-    if (0) {
+    if (1) {
         //Muxout control to readback to muxout
         res |= hackrf_set_adf4158_reg("muxout", 15);
-        res |= hackrf_set_adf4158_reg("neg_bleed_current", 0);
+        //res |= hackrf_set_adf4158_reg("neg_bleed_current", 0);
         res |= hackrf_set_adf4158_reg("readback_to_muxout", 3);
     } else {
         res |= hackrf_set_adf4158_reg("neg_bleed_current", 3);

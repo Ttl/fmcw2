@@ -264,7 +264,7 @@ int main(void) {
 				(transceiver_mode() == TRANSCEIVER_MODE_RX)
 				? &usb_endpoint_bulk_in : &usb_endpoint_bulk_out,
 				&usb_bulk_buffer[0x4000],
-				0x4000-8, // Last 8 bytes are unused
+				0x4000-32, // Last 32 bytes are unused
 				NULL, NULL
 			);
 			phase = 1;

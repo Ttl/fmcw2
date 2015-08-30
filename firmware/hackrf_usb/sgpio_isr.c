@@ -53,6 +53,8 @@ void sgpio_isr_rx() {
         "str r0, [%[p], #32]\n\t"
         "ldr r0, [%[SGPIO_REG_SS], #52]\n\t"
         "str r0, [%[p], #36]\n\t"
+        "ldr r0, [%[SGPIO_REG_SS], #28]\n\t"
+        "str r0, [%[p], #40]\n\t"
 		:
 		: [SGPIO_REG_SS] "l" (SGPIO_PORT_BASE + 0x100),
 		  [p] "l" (p)
@@ -73,10 +75,12 @@ void sgpio_isr_rx() {
     p[8] = SGPIO_REG_SS(SGPIO_SLICE_G);
     // D0
     p[9] = SGPIO_REG_SS(SGPIO_SLICE_N);
+    // Sync
+    p[10] = SGPIO_REG_SS(SGPIO_SLICE_H);
     */
 
-    usb_bulk_buffer_offset += 10*4;
-    if (usb_bulk_buffer_offset > usb_bulk_buffer_size-10*4) {
+    usb_bulk_buffer_offset += 11*4;
+    if (usb_bulk_buffer_offset > usb_bulk_buffer_size-11*4) {
         usb_bulk_buffer_offset = 0;
     }
 }
