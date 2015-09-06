@@ -3,93 +3,16 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include "taps.h"
 
 #define BLOCK 10*1024*1024
 #define PACKET_SIZE 44
 
-int decimate = 5;
+int decimate = 20;
 int filter = 1;
 
-//10.2e6 sample rate
-//1e6 cutoff
-//Order 75
-const static float taps[] = {
--0.000493656697454,
--0.00013255116767,
-0.000328953247674,
-0.000768284177902,
-0.00101983945803,
-0.000911971775533,
-0.000346352730748,
--0.000608452414895,
--0.0016647344791,
--0.00236024152727,
--0.00221917225251,
--0.000988097786741,
-0.00115237730846,
-0.00352037245284,
-0.0050927547003,
-0.00488405010035,
-0.00242400594025,
--0.00186781082839,
--0.00661587040672,
--0.0098436104867,
--0.0096952578402,
--0.00529127640339,
-0.00262851392347,
-0.0116035845836,
-0.0180603854265,
-0.0185326912,
-0.011127412773,
--0.00329816541075,
--0.020761227265,
--0.03486815785,
--0.0385386262414,
--0.0262734430007,
-0.00375572663871,
-0.0485351170886,
-0.10044913874,
-0.148982508572,
-0.183443860716,
-0.19590490101,
-0.183443860716,
-0.148982508572,
-0.10044913874,
-0.0485351170886,
-0.00375572663871,
--0.0262734430007,
--0.0385386262414,
--0.03486815785,
--0.020761227265,
--0.00329816541075,
-0.011127412773,
-0.0185326912,
-0.0180603854265,
-0.0116035845836,
-0.00262851392347,
--0.00529127640339,
--0.0096952578402,
--0.0098436104867,
--0.00661587040672,
--0.00186781082839,
-0.00242400594025,
-0.00488405010035,
-0.0050927547003,
-0.00352037245284,
-0.00115237730846,
--0.000988097786741,
--0.00221917225251,
--0.00236024152727,
--0.0016647344791,
--0.000608452414895,
-0.000346352730748,
-0.000911971775533,
-0.00101983945803,
-0.000768284177902,
-0.000328953247674,
--0.00013255116767,
--0.000493656697454,
-};
+const static float *taps = taps_200e3;
+
 uint32_t array_to_32(int8_t *arr) {
     return (((uint32_t)arr[3] & 0xFF)<<(3*8))|(((uint32_t)arr[2] & 0xFF)<<(2*8))|(((uint32_t)arr[1] & 0xFF)<<(1*8))|((uint32_t)arr[0] & 0xFF);
 }
@@ -153,7 +76,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    unsigned int block_size = BLOCK - BLOCK%lcm(PACKET_SIZE, lcm(decimate, sizeof(taps)));
+    unsigned int block_size = BLOCK - BLOCK%lcm(PACKET_SIZE, lcm(decimate, TAPS_LENGTH));
     printf("Block size: %d\n", block_size);
 
     int8_t *block8 = malloc(block_size*sizeof(int8_t));
@@ -182,6 +105,52 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    //Read header
+    {
+        int res;
+        char magic[4];
+        //Magic, should be "FMCW"
+        res = fread(magic, 1, 4, fin);
+        if (res != 4) {
+            printf("Failed to read input file\n");
+            return -1;
+        }
+        if (strncmp("FMCW", magic, 4) != 0) {
+            printf("Invalid header, exiting\n");
+            return -1;
+        }
+        int version;
+        int header_size;
+        double sample_rate;
+        res = fread(&version, 4, 1, fin);
+        res = fread(&header_size, 4, 1, fin);
+        res = fread(&sample_rate, 8, 1, fin);
+        if (res != 1) {
+            printf("Failed to read header\n");
+            return -1;
+        }
+        printf("Sample rate: %f\n", sample_rate);
+        header_size = header_size-4-4-4-8;
+
+        //Copy header to output
+        char *header = malloc(header_size);
+        if (!header) {
+            printf("malloc failed\n");
+            return -1;
+        }
+        res = fread(header, 1, header_size, fin);
+        if (res != header_size) {
+            printf("Failed to read header\n");
+            return -1;
+        }
+        fwrite(magic, 1, 4, fout);
+        fwrite(&version, 4, 1, fout);
+        fwrite(&header_size, 4, 1, fout);
+        sample_rate = sample_rate/decimate;
+        fwrite(&sample_rate, 8, 1, fout);
+        fwrite(header, 1, header_size, fout);
+    }
+
     int read_size;
     int i, j;
     int fsamples;
@@ -200,15 +169,18 @@ int main(int argc, char *argv[]) {
 
         // Attach the 2 LSB bits to right samples
         int read_samples = 0;
+        int sync_phase = 1;
         for(i=0;i<read_size/PACKET_SIZE;i++) {
             for(j=0;j<31;j++) {
                 sample_counter++;
                 // Store bits as bytes for easier access
                 uint8_t sync = !!(array_to_32(block8+(i*PACKET_SIZE+40)) & (1 << j));
-                if (sync) {
-                    syncs[sync_counter++] = sample_counter-last_sync;
-                    //printf("%d\n", sample_counter-last_sync);
-                    last_sync = sample_counter;
+                if (sync_phase != sync) {
+                    sync_phase = sync;
+                    if ( sync_phase == 0) {
+                        syncs[sync_counter++] = sample_counter-last_sync;
+                        last_sync = sample_counter;
+                    }
                 }
                 int d1 = !!(array_to_32(block8+(i*PACKET_SIZE+32)) & (1 << j));
                 int d0 = !!(array_to_32(block8+(i*PACKET_SIZE+36)) & (1 << j));
@@ -222,7 +194,7 @@ int main(int argc, char *argv[]) {
             }
         }
         if (filter) {
-            fsamples = conv(taps, sizeof(taps)/sizeof(taps[0]), block, read_samples, block_filtered);
+            fsamples = conv(taps, TAPS_LENGTH, block, read_samples, block_filtered);
             // Move unused samples to beginning of the block
             for(i=fsamples;i<read_samples;i++) {
                 block[i-fsamples] = block[i];

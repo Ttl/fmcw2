@@ -162,6 +162,7 @@ extern ADDAPI int ADDCALL hackrf_adf4158_to_device(hackrf_device* device);
 extern ADDAPI int ADDCALL hackrf_set_mcp(hackrf_device* device, uint32_t value);
 extern ADDAPI int ADDCALL hackrf_set_gpio(hackrf_device *device, uint32_t bits);
 extern ADDAPI int ADDCALL hackrf_clear_gpio(hackrf_device *device, uint32_t bits);
+extern ADDAPI int ADDCALL hackrf_set_clock_divider(hackrf_device *device, uint16_t divider);
 
 #ifdef __cplusplus
 } // __cplusplus defined.

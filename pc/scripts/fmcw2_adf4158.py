@@ -1,7 +1,10 @@
 from __future__ import division
 import usb
+from usb.core import USBError
 import time
 import math
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class ADF4158():
@@ -86,6 +89,7 @@ class ADF4158():
         print "fdev",fdev
 
         dev_offset = int(math.ceil(math.log(fdev/(fres*devmax), 2)))
+        dev_offset = max(0, dev_offset)
         print "dev offset",dev_offset
 
         fdev_res = fres * 2**dev_offset
@@ -157,18 +161,20 @@ if __name__ == "__main__":
 
         device.set_configuration()
 
-        for i in xrange(3):
-            #Blink LED
-            device.ctrl_transfer(0x40, 5, 0, 1<<4) #Disable LED
-            time.sleep(0.1)
-            device.ctrl_transfer(0x40, 4, 0, 1<<4) #Enable LED
-            time.sleep(0.1)
+        #for i in xrange(3):
+        #    #Blink LED
+        #    device.ctrl_transfer(0x40, 5, 0, 1<<4) #Disable LED
+        #    time.sleep(0.1)
+        #    device.ctrl_transfer(0x40, 4, 0, 1<<4) #Enable LED
+        #    time.sleep(0.1)
 
         device.ctrl_transfer(0x40, 4, 0, 1<<3) #MIXER ENBL high
         device.ctrl_transfer(0x40, 4, 0, 1<<2) #PA on
         device.ctrl_transfer(0x40, 4, 0, 1<<1) #ADC on
 
         device.ctrl_transfer(0x40, 4, 0, 1) #ADF on
+
+        device.ctrl_transfer(0x40, 6, 0, 0) # Set MCP gain
     else:
         device = None
 
@@ -178,6 +184,51 @@ if __name__ == "__main__":
     adf.write_value(pd_polarity=1, prescaler=1, r_counter=1)
     # Enable cycle slip reduction, Enable negative bleed current
     adf.write_value(csr_en=1, neg_bleed_current=3)
-    adf.configure_ramp(5.5e9, 30e6, 500e6, 500e-6)
+    adf.configure_ramp(5.4e9, 30e6, 300e6, 1000e-6)
     adf.write_value(ramp_mode=1) #Triangle
     adf.to_device(device)
+
+    device.ctrl_transfer(0x40, 1, 1, 0) # Transceiver mode RX
+
+    plt.ion()
+    plt.show()
+    pdata = [0]*10*512
+    #line, = plt.plot(pdata)
+    line = None
+    plt.ylim([-1,1])
+    i = 0
+    tstart = time.time()
+    try:
+        while True:
+                i = i+1
+                data = device.read(0x81, 512)
+                continue
+                #print data
+                s = []
+                for d in data:
+                    if d & (1<<7):
+                        d = (~d + 1) & 0xff
+                        d = -d
+                    s.append(d/128.)
+                pdata[i*512:(i+1)*512] = s
+                print max(pdata)
+                fft = 10*np.log(map(abs,np.fft.rfft(s)))
+                #plt.ylim([-50,50])
+                x = pdata
+                if line == None:
+                    line, = plt.plot(x)
+                else:
+                    line.set_ydata(x)  # update the data
+                #line.set_ydata(pdata)  # update the data
+                plt.draw()
+                plt.pause(0.0001)
+    except KeyboardInterrupt:
+        tend = time.time()-tstart
+        print tend, i*512, 1e-6*i*512/(tend)
+    finally:
+        #device.ctrl_transfer(0x40, 5, 0, 1<<2) #PA off
+        #device.ctrl_transfer(0x40, 5, 0, 1<<1) #ADC off
+        #device.ctrl_transfer(0x40, 5, 0, 1) #ADF off
+
+        device.ctrl_transfer(0x40, 1, 0, 0) # Transceiver mode off
+

@@ -32,6 +32,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pthread.h>
 
 #ifndef bool
 typedef int bool;
@@ -80,6 +81,8 @@ int gettimeofday(struct timeval *tv, void* ignored)
 
 #include <signal.h>
 
+#define FILE_VERSION (0)
+
 #define FD_BUFFER_SIZE (8*1024)
 
 #define FREQ_ONE_MHZ (1000000ull)
@@ -101,6 +104,14 @@ int gettimeofday(struct timeval *tv, void* ignored)
 
 #define BASEBAND_FILTER_BW_MIN (1750000)  /* 1.75 MHz min value */
 #define BASEBAND_FILTER_BW_MAX (28000000) /* 28 MHz max value */
+
+#define WRITE_BUFFER_SIZE (50*1024*1024)
+
+volatile static char fwrite_buffer[WRITE_BUFFER_SIZE];
+volatile static int fb_start = 0, fb_end = 0;
+pthread_mutex_t buf_mutex=PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t writer_mutex=PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 #if defined _WIN32
 	#define sleep(a) Sleep( (a*1000) )
@@ -178,6 +189,92 @@ typedef struct
 
 t_u64toa ascii_u64_data1;
 t_u64toa ascii_u64_data2;
+
+static int buf_add(const uint8_t *s, int l) {
+    //Add l bytes to buffer,
+    //returns number of bytes left over
+    int left = l;
+    int fb = fb_end;
+    int start = fb_start;
+    while ( left > 0 ) {
+        int fb_next = (fb + 1);
+        if (fb_next > WRITE_BUFFER_SIZE) {
+            fb_next -= WRITE_BUFFER_SIZE;
+        }
+        if (fb_next == start) {
+            //Reached end, acquire mutex and check if reader has made more room
+            //pthread_mutex_lock(&buf_mutex);
+            start = fb_start;
+            //pthread_mutex_unlock(&buf_mutex);
+            //No more room, abort
+            if (fb_next == start) {
+                return left;
+            }
+        }
+        fwrite_buffer[fb] = s[l-left];
+        fb = fb_next;
+        left--;
+    }
+    //pthread_mutex_lock(&buf_mutex);
+    fb_end = fb;
+    //pthread_mutex_unlock(&buf_mutex);
+    return left;
+}
+
+static int buf_size(void) {
+    //pthread_mutex_lock(&buf_mutex);
+    int bytes = fb_end - fb_start;
+    //pthread_mutex_unlock(&buf_mutex);
+    if (bytes < 0) {
+        bytes += WRITE_BUFFER_SIZE;
+    }
+    return bytes;
+}
+
+static int buf_get(uint8_t *dest, int max_bytes) {
+    //Get max_bytes bytes from the buffer
+    //Returns number of bytes read
+    //pthread_mutex_lock(&buf_mutex);
+    int bytes = fb_end - fb_start;
+    if (bytes < 0) {
+        bytes += WRITE_BUFFER_SIZE;
+    }
+    if (bytes > max_bytes) {
+        bytes = max_bytes;
+    }
+    int i = 0;
+    while ( bytes > 0) {
+        dest[i++] = fwrite_buffer[fb_start];
+        fb_start = (fb_start + 1) % WRITE_BUFFER_SIZE;
+        bytes--;
+    }
+    //pthread_mutex_unlock(&buf_mutex);
+    return i;
+}
+
+static int buf_init(void)
+{
+    int ret = 0;
+    ret = pthread_cond_init(&cond, NULL);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = pthread_mutex_init(&buf_mutex, NULL);
+    if (ret != 0) {
+        pthread_cond_destroy(&cond);
+        return ret;
+    }
+
+    ret = pthread_mutex_init(&writer_mutex, NULL);
+    if (ret != 0) {
+        pthread_cond_destroy(&cond);
+        pthread_mutex_destroy(&buf_mutex);
+        return ret;
+    }
+    return 0;
+
+}
 
 static float
 TimevalDiff(const struct timeval *a, const struct timeval *b)
@@ -332,13 +429,62 @@ uint32_t baseband_filter_bw_hz = 0;
 
 bool repeat = false;
 
+volatile int thread_exit = 0;
+volatile int thread_done = 0;
+
+static void write_header(FILE *fd, double sample_rate, double f0, double bw, double tsweep, int flags) {
+    char magic[] = "FMCW";
+    int version = FILE_VERSION;
+    //magic, version, header size, sample_rate, f0, bw, tsweep, flags
+    int header_length = 4+4+4+ 8+8+8+8+4;
+    fwrite(magic, 1, 4, fd);
+    fwrite(&version, 4, 1, fd);
+    fwrite(&header_length, 4, 1, fd);
+    fwrite(&sample_rate, 8, 1, fd);
+    fwrite(&f0, 8, 1, fd);
+    fwrite(&bw, 8, 1, fd);
+    fwrite(&tsweep, 8, 1, fd);
+    fwrite(&flags, 4, 1, fd);
+}
+
+static void* write_thread(void* arg) {
+    uint8_t *fd_buf = malloc(WRITE_BUFFER_SIZE);
+    if (!fd_buf) {
+        printf("malloc failed\n");
+        return 0;
+    }
+    int bytes_to_write;
+    FILE *fout = (FILE*)arg;
+    int wrote;
+    while( !thread_exit ) {
+        pthread_mutex_lock(&writer_mutex);
+        //Wait until we get something to write
+        while ( !(bytes_to_write = buf_get(fd_buf, WRITE_BUFFER_SIZE)) ) {
+            pthread_cond_wait(&cond, &writer_mutex);
+            if (thread_exit) {
+                break;
+            }
+        }
+        pthread_mutex_unlock(&writer_mutex);
+        int written = 0;
+        wrote = 0;
+        while (written < bytes_to_write) {
+            wrote = fwrite(&fd_buf[written], 1, bytes_to_write - wrote, fout);
+            written += wrote;
+        }
+    }
+    thread_done = 1;
+    pthread_exit(NULL);
+    return 0;
+}
+
 int rx_callback(hackrf_transfer* transfer) {
 	size_t bytes_to_write;
 	int i;
 
 	if( fd != NULL )
 	{
-		ssize_t bytes_written;
+		ssize_t bytes_left;
 		byte_count += transfer->valid_length;
 		bytes_to_write = transfer->valid_length;
 		if (limit_num_samples) {
@@ -353,13 +499,48 @@ int rx_callback(hackrf_transfer* transfer) {
 				transfer->buffer[i] ^= (uint8_t)0x80;
 			}
 		}
-		bytes_written = fwrite(transfer->buffer, 1, bytes_to_write, fd);
-		if ((bytes_written != bytes_to_write)
+        if (0) {
+            ssize_t bytes_written = fwrite(transfer->buffer, 1, bytes_to_write, fd);
+            if ((bytes_written != bytes_to_write)
 				|| (limit_num_samples && (bytes_to_xfer == 0))) {
-			return -1;
-		} else {
-			return 0;
-		}
+                return -1;
+            } else {
+                return 0;
+            }
+        } else {
+            /*
+            struct timeval time_now, time_start;
+            float time_difference;
+            static float max_diff = 0;
+
+            gettimeofday(&time_now, NULL);
+            time_start = time_now;
+            */
+
+            while ( (bytes_left = buf_add(transfer->buffer, bytes_to_write)) ) {
+                printf("Buffer full\n");
+            }
+            //gettimeofday(&time_now, NULL);
+
+            //Signal to writer
+            pthread_mutex_lock(&writer_mutex);
+            pthread_cond_signal(&cond);
+            pthread_mutex_unlock(&writer_mutex);
+
+            /*
+            time_difference = TimevalDiff(&time_now, &time_start);
+            if (time_difference > max_diff) {
+                printf("%f %d\n", time_difference, (int)bytes_to_write);
+                max_diff = time_difference;
+            }
+            */
+            if ((bytes_left != 0)
+                    || (limit_num_samples && (bytes_to_xfer == 0))) {
+                return -1;
+            } else {
+                return 0;
+            }
+        }
 	} else {
 		return -1;
 	}
@@ -742,6 +923,13 @@ int main(int argc, char** argv) {
 		}
 	}
 
+    //Create thread for writing to file
+    if (buf_init()) {
+        printf("buf_init failed\n");
+        return -1;
+    }
+
+
 	result = hackrf_init();
 	if( result != HACKRF_SUCCESS ) {
 		printf("hackrf_init() failed: %s (%d)\n", hackrf_error_name(result), result);
@@ -777,6 +965,17 @@ int main(int argc, char** argv) {
 		}
 	}
 
+    pthread_t writer;
+    pthread_attr_t attr;
+
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+    if (pthread_create(&writer, &attr, write_thread, fd)) {
+        printf("pthread_create failed\n");
+        return -1;
+    }
+
 	/* Write Wav header */
 	if( receive_wav )
 	{
@@ -799,11 +998,19 @@ int main(int argc, char** argv) {
 		printf("hackrf_set_mcp() failed: %s (%d)\n", hackrf_error_name(result), result);
 		return EXIT_FAILURE;
 	}
-    result = hackrf_set_sweep(device, 5.3e9, 500e6, 0.5e-3);
+    double f0 = 5.6e9;
+    double bw = 200e6;
+    double tsweep = 1.0e-3;
+
+    result = hackrf_set_sweep(device, f0, bw, tsweep);
 	if( result != HACKRF_SUCCESS ) {
 		printf("hackrf_set_sweep() failed: %s (%d)\n", hackrf_error_name(result), result);
 		return EXIT_FAILURE;
 	}
+    int clk_divider = 20;
+    double sample_rate = 204e6/(2*clk_divider);
+    result = hackrf_set_clock_divider(device, clk_divider);
+    write_header(fd, sample_rate, f0, bw, tsweep, 0);
 
     result = hackrf_start_rx(device, rx_callback, NULL);
 
@@ -885,6 +1092,17 @@ int main(int argc, char** argv) {
 		hackrf_exit();
 		printf("hackrf_exit() done\n");
 	}
+
+    while ( buf_size() != 0 ) {
+        sleep(1);
+    }
+
+    while ( !thread_done ) {
+        thread_exit = 1;
+        pthread_mutex_lock(&writer_mutex);
+        pthread_cond_signal(&cond);
+        pthread_mutex_unlock(&writer_mutex);
+    }
 
 	if(fd != NULL)
 	{

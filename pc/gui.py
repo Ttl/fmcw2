@@ -1,39 +1,21 @@
 import numpy as np
 import sys
-from PySide.QtGui import QApplication, QMainWindow, QVBoxLayout
+import os
+from PySide.QtGui import QApplication, QMainWindow
 from PySide import QtCore
-import dummy_radar
 import time
 import connect_radar
 
 from fmcw_gui import Ui_MainWindow
 
-import matplotlib
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from multiprocessing import Process, Queue
 
 import PySide
 import pyqtgraph as pg
 
-matplotlib.use('Qt4Agg')
-matplotlib.rcParams['backend.qt4']='PySide'
-
 pg.setConfigOptions(antialias=True)
 
 use_multiprocessing = False
-
-class MatplotlibWidget(FigureCanvas):
-    def __init__(self, parent=None,xlabel='x',ylabel='y'):
-        super(MatplotlibWidget, self).__init__(Figure())
-
-        self.setParent(parent)
-        self.figure = Figure()
-        self.canvas = FigureCanvas(self.figure)
-        self.axes = self.figure.add_subplot(111)
-
-        self.axes.set_xlabel(xlabel)
-        self.axes.set_ylabel(ylabel)
 
 def radar_streamer(sample_queue, radar):
     """
@@ -53,11 +35,12 @@ class Runner(QtCore.QThread):
 
     message = QtCore.Signal(list)
 
-    def __init__(self, radar, parent=None):
+    def __init__(self, radar, log=None, parent=None):
         super(Runner, self).__init__(parent)
         self.radar = radar
         self.p = None
         self.stopping = False
+        self.log = log
 
     def run(self):
         if use_multiprocessing:
@@ -74,6 +57,8 @@ class Runner(QtCore.QThread):
         else:
             for sample in self.radar.stream():
                 self.message.emit(sample)
+                if self.log:
+                    self.log.write(bytearray(sample))
                 if self.stopping:
                     break
 
@@ -95,6 +80,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         #Initialize variables
         self.threads = []
         self.radar = None
+        self.log_file = None
+        self.log_handle = None
+
         self.status = 'Disconnected'
         super(MainWindow, self).__init__(parent)
         #Initialize UI
@@ -112,6 +100,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionDetect_radars.setStatusTip('Detect connected radars')
         self.actionDetect_radars.triggered.connect(self.detect_radars)
 
+        self.actionSet_log_file.setShortcut('Ctrl+L')
+        self.actionSet_log_file.setStatusTip('Set the raw data log file')
+        self.actionSet_log_file.triggered.connect(self.set_log_file)
+
         self.timeplot_type = None
         self.radioButton_range.toggled.connect(self.set_timeplot)
         self.radioButton_time.toggled.connect(self.set_timeplot)
@@ -125,6 +117,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.pushButtonTrigger.clicked.connect(self.trigger_once)
 
         self.rfpowerBox.toggled.connect(self.set_rfpower)
+        self.logBox.toggled.connect(self.set_logging)
 
         self.detect_radars()
 
@@ -139,6 +132,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.waterfall_history_length = 500
 
         self.print_status()
+
+    def set_log_file(self):
+        fileName,_ = PySide.QtGui.QFileDialog.getSaveFileName(self, "Set log file", "fmcw_log_{}.log".format(time.strftime('%Y-%m-%dT%H-%M-%S')),
+                '*.log')
+        _, ext = os.path.splitext(fileName)
+
+        if not ext:
+            fileName = fileName+'.log'
+
+        if fileName:
+            f = open(fileName, 'w')
+
+            self.log_handle = f
+            self.log_file = fileName
+            for thread in self.threads:
+                thread.log = self.log_handle
 
     def detect_radars(self):
         if self.radar:
@@ -155,7 +164,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.radar.connect()
         #Make sure radar and GUI have same settings
         self.set_sweep()
-        self.addWorker(Runner(self.radar))
+        self.addWorker(Runner(self.radar, self.log_handle))
         self.startWorkers()
         self.print_status()
 
@@ -165,6 +174,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except AttributeError:
             name = ""
         self.statusBar().showMessage("{} - {}".format(self.status,name))
+
+    def set_logging(self):
+        self.logging = self.logBox.isChecked()
 
     def addWorker(self, worker):
         worker.message.connect(self.plotTimePoints, QtCore.Qt.QueuedConnection)
@@ -226,7 +238,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.timeplotW.setLabel('bottom', 'Frequency', 'Hz')
             self.timeplotW.setLabel('left', 'Power', 'dB')
         if self.timeplot_type == "time":
-            self.timeplotW.setLabel('bottom', 'Time', 's')
+            self.timeplotW.setLabel('bottom', 'Time', 'ms')
             self.timeplotW.setLabel('left', 'Voltage', 'V')
         if not self.timeplot_valid or len(y) != len(self.timeplotx):
             self.timeplot_valid = True
@@ -271,6 +283,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @QtCore.Slot(list)
     def plotTimePoints(self, y):
+        bits = 2.**self.radar.sample_bits
+        y = [s/bits-0.5 for s in y]
         if abs(time.time() - self.last_update) < 1/30.:
             return
         self.last_update = time.time()
@@ -308,7 +322,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def closeEvent(self, event):
         self.stopWorkers()
-        self.radar.disconnect()
+        if self.radar:
+            self.radar.disconnect()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -589,7 +589,7 @@ static int hackrf_open_setup(libusb_device_handle* usb_device, hackrf_device** d
 	lib_device->transfer_count = 1024;
 	lib_device->buffer_size = 16384;
 	*/
-	lib_device->transfer_count = 4;
+	lib_device->transfer_count = 4*4;
 	lib_device->buffer_size = 262144; /* 1048576; */
 	lib_device->streaming = false;
 	do_exit = false;
@@ -874,6 +874,22 @@ int ADDCALL hackrf_clear_gpio(hackrf_device *device, uint32_t bits) {
 		HACKRF_VENDOR_REQUEST_CLEAR_GPIO,
 		bits >> 16,
 		bits & 0xFFFF,
+		NULL,
+		0,
+		0
+	);
+    return result;
+}
+
+//Set ADC clock divider
+//ADC clock = 204/(2*divider) MHz
+int ADDCALL hackrf_set_clock_divider(hackrf_device *device, uint16_t divider) {
+    int result = libusb_control_transfer(
+		device->usb_device,
+		LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
+		HACKRF_VENDOR_REQUEST_SET_CLOCK,
+		divider,
+		0x5555,
 		NULL,
 		0,
 		0

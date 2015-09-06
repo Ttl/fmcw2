@@ -33,7 +33,7 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="5" column="1">
+    <item row="4" column="1">
      <widget class="QFrame" name="frame_3">
       <property name="minimumSize">
        <size>
@@ -153,7 +153,7 @@
         <double>0.100000000000000</double>
        </property>
        <property name="value">
-        <double>6.000000000000000</double>
+        <double>5.700000000000000</double>
        </property>
       </widget>
       <widget class="QDoubleSpinBox" name="lengthSpinBox">
@@ -172,7 +172,7 @@
         <double>0.100000000000000</double>
        </property>
        <property name="value">
-        <double>1.000000000000000</double>
+        <double>0.500000000000000</double>
        </property>
       </widget>
       <widget class="QLabel" name="label_6">
@@ -203,7 +203,7 @@
       </widget>
      </widget>
     </item>
-    <item row="8" column="0">
+    <item row="7" column="0">
      <widget class="PlotWidget" name="timeplotW" native="true">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="MinimumExpanding">
@@ -219,7 +219,7 @@
       </property>
      </widget>
     </item>
-    <item row="0" column="0" rowspan="8">
+    <item row="0" column="0" rowspan="7">
      <widget class="PlotWidget" name="rangeplotW" native="true">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -286,64 +286,7 @@
       </widget>
      </widget>
     </item>
-    <item row="3" column="1">
-     <widget class="QFrame" name="frame">
-      <property name="minimumSize">
-       <size>
-        <width>0</width>
-        <height>80</height>
-       </size>
-      </property>
-      <property name="frameShape">
-       <enum>QFrame::StyledPanel</enum>
-      </property>
-      <property name="frameShadow">
-       <enum>QFrame::Raised</enum>
-      </property>
-      <widget class="QWidget" name="gridLayoutWidget">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>10</y>
-         <width>161</width>
-         <height>61</height>
-        </rect>
-       </property>
-       <layout class="QGridLayout" name="gridLayout_2">
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_save">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="text">
-           <string>Log file</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLineEdit" name="lineEdit"/>
-        </item>
-        <item row="1" column="1">
-         <widget class="QPushButton" name="pushButton">
-          <property name="maximumSize">
-           <size>
-            <width>70</width>
-            <height>16777215</height>
-           </size>
-          </property>
-          <property name="text">
-           <string>Browse</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-     </widget>
-    </item>
-    <item row="7" column="1">
+    <item row="6" column="1">
      <widget class="QGroupBox" name="groupBox_2">
       <property name="minimumSize">
        <size>
@@ -385,7 +328,7 @@
       </widget>
      </widget>
     </item>
-    <item row="6" column="1">
+    <item row="5" column="1">
      <spacer name="verticalSpacer">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
@@ -397,6 +340,13 @@
        </size>
       </property>
      </spacer>
+    </item>
+    <item row="2" column="1">
+     <widget class="QCheckBox" name="rfpowerBox">
+      <property name="text">
+       <string>RF power</string>
+      </property>
+     </widget>
     </item>
     <item row="0" column="1">
      <widget class="QPushButton" name="pushButtonTrigger">
@@ -411,7 +361,7 @@
       </property>
      </widget>
     </item>
-    <item row="8" column="1">
+    <item row="7" column="1">
      <widget class="QGroupBox" name="plotGroup">
       <property name="minimumSize">
        <size>
@@ -432,7 +382,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>Time</string>
+        <string>Ti&amp;me</string>
        </property>
        <property name="checked">
         <bool>true</bool>
@@ -448,7 +398,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>Frequency</string>
+        <string>Fre&amp;quency</string>
        </property>
       </widget>
       <widget class="QRadioButton" name="radioButton_none">
@@ -461,15 +411,15 @@
         </rect>
        </property>
        <property name="text">
-        <string>None</string>
+        <string>&amp;None</string>
        </property>
       </widget>
      </widget>
     </item>
-    <item row="2" column="1">
-     <widget class="QCheckBox" name="rfpowerBox">
+    <item row="3" column="1">
+     <widget class="QCheckBox" name="logBox">
       <property name="text">
-       <string>RF power</string>
+       <string>Logging</string>
       </property>
      </widget>
     </item>
@@ -481,9 +431,9 @@
    <zorder>timeplotW</zorder>
    <zorder>plotGroup</zorder>
    <zorder>groupBox_2</zorder>
-   <zorder>frame</zorder>
    <zorder>verticalSpacer</zorder>
    <zorder>rfpowerBox</zorder>
+   <zorder>logBox</zorder>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
@@ -498,6 +448,8 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
+    <addaction name="actionSet_log_file"/>
+    <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
    <widget class="QMenu" name="menuRadar">
@@ -518,6 +470,11 @@
   <action name="actionDetect_radars">
    <property name="text">
     <string>&amp;Detect radars</string>
+   </property>
+  </action>
+  <action name="actionSet_log_file">
+   <property name="text">
+    <string>Set log file</string>
    </property>
   </action>
  </widget>
