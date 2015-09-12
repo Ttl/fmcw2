@@ -198,7 +198,7 @@ static int buf_add(const uint8_t *s, int l) {
     int start = fb_start;
     while ( left > 0 ) {
         int fb_next = (fb + 1);
-        if (fb_next > WRITE_BUFFER_SIZE) {
+        if (fb_next >= WRITE_BUFFER_SIZE) {
             fb_next -= WRITE_BUFFER_SIZE;
         }
         if (fb_next == start) {
