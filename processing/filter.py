@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 N = 75
-nyquist = 10.2e6/2.
+nyquist = 5.1e6/2.
 cutoff = 200e3
 
 def conv(taps, signal):

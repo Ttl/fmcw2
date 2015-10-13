@@ -52,6 +52,8 @@
 
 static volatile transceiver_mode_t _transceiver_mode = TRANSCEIVER_MODE_OFF;
 
+static unsigned int phase = 1;
+
 void set_transceiver_mode(const transceiver_mode_t new_transceiver_mode) {
 	baseband_streaming_disable();
 
@@ -62,6 +64,8 @@ void set_transceiver_mode(const transceiver_mode_t new_transceiver_mode) {
 
 	if( _transceiver_mode == TRANSCEIVER_MODE_RX ) {
         usb_endpoint_init(&usb_endpoint_bulk_in);
+        usb_bulk_buffer_offset = 0;
+        phase = 1;
 	} else if (_transceiver_mode == TRANSCEIVER_MODE_TX) {
 		//usb_endpoint_init(&usb_endpoint_bulk_out);
 	}
@@ -229,15 +233,6 @@ int main(void) {
 
     mcp_init();
 
-    /*
-    //Configure SSP1_MISO/P1_3/GPIO[0]10 (ADF4158 MUXOUT) as pin interrupt
-    SCU_PINTSEL0 = (0 << 5)|10; //GPIO[0]10
-
-	nvic_set_priority(NVIC_PIN_INT0_IRQ, 0);
-    vector_table.irq[NVIC_PIN_INT0_IRQ] = muxout_isr;
-    */
-
-	unsigned int phase = 1;
 	while(true) {
 
     //gpio_set(PORT_LED1_3, PIN_LED1);

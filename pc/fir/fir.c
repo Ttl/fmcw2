@@ -5,13 +5,13 @@
 #include <math.h>
 #include "taps.h"
 
-#define BLOCK 10*1024*1024
+#define BLOCK 100*1024*1024
 #define PACKET_SIZE 44
 
-int decimate = 20;
-int filter = 1;
+int decimate = 1;
+int filter = 0;
 
-const static float *taps = taps_200e3;
+const static float *taps = taps_200e3_51;
 
 uint32_t array_to_32(int8_t *arr) {
     return (((uint32_t)arr[3] & 0xFF)<<(3*8))|(((uint32_t)arr[2] & 0xFF)<<(2*8))|(((uint32_t)arr[1] & 0xFF)<<(1*8))|((uint32_t)arr[0] & 0xFF);
@@ -130,6 +130,7 @@ int main(int argc, char *argv[]) {
             return -1;
         }
         printf("Sample rate: %f\n", sample_rate);
+        printf("New sample rate: %f\n", sample_rate/decimate);
         header_size = header_size-4-4-4-8;
 
         //Copy header to output
