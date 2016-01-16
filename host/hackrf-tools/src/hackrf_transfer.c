@@ -86,109 +86,17 @@ int gettimeofday(struct timeval *tv, void* ignored)
 #define FD_BUFFER_SIZE (8*1024)
 
 #define FREQ_ONE_MHZ (1000000ull)
-
-#define DEFAULT_FREQ_HZ (900000000ull) /* 900MHz */
-#define FREQ_MIN_HZ	(0ull) /* 0 Hz */
-#define FREQ_MAX_HZ	(7250000000ull) /* 7250MHz */
-#define IF_MIN_HZ (2150000000ull)
-#define IF_MAX_HZ (2750000000ull)
-#define LO_MIN_HZ (84375000ull)
-#define LO_MAX_HZ (5400000000ull)
-#define DEFAULT_LO_HZ (1000000000ull)
-
-#define DEFAULT_SAMPLE_RATE_HZ (10000000) /* 10MHz default sample rate */
-
-#define DEFAULT_BASEBAND_FILTER_BANDWIDTH (5000000) /* 5MHz default */
-
-#define SAMPLES_TO_XFER_MAX (0x8000000000000000ull) /* Max value */
-
-#define BASEBAND_FILTER_BW_MIN (1750000)  /* 1.75 MHz min value */
-#define BASEBAND_FILTER_BW_MAX (28000000) /* 28 MHz max value */
-
 #define WRITE_BUFFER_SIZE (50*1024*1024)
 
 volatile static char fwrite_buffer[WRITE_BUFFER_SIZE];
 volatile static int fb_start = 0, fb_end = 0;
-pthread_mutex_t buf_mutex=PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t writer_mutex=PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t buf_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t writer_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 #if defined _WIN32
 	#define sleep(a) Sleep( (a*1000) )
 #endif
-
-/* WAVE or RIFF WAVE file format containing IQ 2x8bits data for HackRF compatible with SDR# Wav IQ file */
-typedef struct 
-{
-    char groupID[4]; /* 'RIFF' */
-    uint32_t size; /* File size + 8bytes */
-    char riffType[4]; /* 'WAVE'*/
-} t_WAVRIFF_hdr;
-
-#define FormatID "fmt "   /* chunkID for Format Chunk. NOTE: There is a space at the end of this ID. */
-
-typedef struct {
-  char		chunkID[4]; /* 'fmt ' */
-  uint32_t	chunkSize; /* 16 fixed */
-
-  uint16_t	wFormatTag; /* 1 fixed */
-  uint16_t	wChannels;  /* 2 fixed */
-  uint32_t	dwSamplesPerSec; /* Freq Hz sampling */
-  uint32_t	dwAvgBytesPerSec; /* Freq Hz sampling x 2 */
-  uint16_t	wBlockAlign; /* 2 fixed */
-  uint16_t	wBitsPerSample; /* 8 fixed */
-} t_FormatChunk;
-
-typedef struct 
-{
-    char		chunkID[4]; /* 'data' */
-    uint32_t	chunkSize; /* Size of data in bytes */
-	/* Samples I(8bits) then Q(8bits), I, Q ... */
-} t_DataChunk;
-
-typedef struct
-{
-	t_WAVRIFF_hdr hdr;
-	t_FormatChunk fmt_chunk;
-	t_DataChunk data_chunk;
-} t_wav_file_hdr;
-
-t_wav_file_hdr wave_file_hdr = 
-{
-	/* t_WAVRIFF_hdr */
-	{
-		{ 'R', 'I', 'F', 'F' }, /* groupID */
-		0, /* size to update later */
-		{ 'W', 'A', 'V', 'E' }
-	},
-	/* t_FormatChunk */
-	{
-		{ 'f', 'm', 't', ' ' }, /* char		chunkID[4];  */
-		16, /* uint32_t	chunkSize; */
-		1, /* uint16_t	wFormatTag; 1 fixed */
-		2, /* uint16_t	wChannels; 2 fixed */
-		0, /* uint32_t	dwSamplesPerSec; Freq Hz sampling to update later */
-		0, /* uint32_t	dwAvgBytesPerSec; Freq Hz sampling x 2 to update later */
-		2, /* uint16_t	wBlockAlign; 2 fixed */
-		8, /* uint16_t	wBitsPerSample; 8 fixed */
-	},
-	/* t_DataChunk */
-	{
-	    { 'd', 'a', 't', 'a' }, /* char chunkID[4]; */
-		0, /* uint32_t	chunkSize; to update later */
-	}
-};
-
-static transceiver_mode_t transceiver_mode = TRANSCEIVER_MODE_RX;
-
-#define U64TOA_MAX_DIGIT (31)
-typedef struct 
-{
-		char data[U64TOA_MAX_DIGIT+1];
-} t_u64toa;
-
-t_u64toa ascii_u64_data1;
-t_u64toa ascii_u64_data2;
 
 static int buf_add(const uint8_t *s, int l) {
     //Add l bytes to buffer,
@@ -203,9 +111,7 @@ static int buf_add(const uint8_t *s, int l) {
         }
         if (fb_next == start) {
             //Reached end, acquire mutex and check if reader has made more room
-            //pthread_mutex_lock(&buf_mutex);
             start = fb_start;
-            //pthread_mutex_unlock(&buf_mutex);
             //No more room, abort
             if (fb_next == start) {
                 return left;
@@ -215,16 +121,12 @@ static int buf_add(const uint8_t *s, int l) {
         fb = fb_next;
         left--;
     }
-    //pthread_mutex_lock(&buf_mutex);
     fb_end = fb;
-    //pthread_mutex_unlock(&buf_mutex);
     return left;
 }
 
 static int buf_size(void) {
-    //pthread_mutex_lock(&buf_mutex);
     int bytes = fb_end - fb_start;
-    //pthread_mutex_unlock(&buf_mutex);
     if (bytes < 0) {
         bytes += WRITE_BUFFER_SIZE;
     }
@@ -248,7 +150,6 @@ static int buf_get(uint8_t *dest, int max_bytes) {
         fb_start = (fb_start + 1) % WRITE_BUFFER_SIZE;
         bytes--;
     }
-    //pthread_mutex_unlock(&buf_mutex);
     return i;
 }
 
@@ -336,98 +237,16 @@ int parse_u32(char* s, uint32_t* const value) {
 	}
 }
 
-
-static char *stringrev(char *str)
-{
-	char *p1, *p2;
-
-	if(! str || ! *str)
-		return str;
-
-	for(p1 = str, p2 = str + strlen(str) - 1; p2 > p1; ++p1, --p2)
-	{
-		*p1 ^= *p2;
-		*p2 ^= *p1;
-		*p1 ^= *p2;
-	}
-	return str;
-}
-
-char* u64toa(uint64_t val, t_u64toa* str)
-{
-	#define BASE (10ull) /* Base10 by default */
-	uint64_t sum;
-	int pos;
-	int digit;
-	int max_len;
-	char* res;
-
-	sum = val;
-	max_len = U64TOA_MAX_DIGIT;
-	pos = 0;
-
-	do
-	{
-		digit = (sum % BASE);
-		str->data[pos] = digit + '0';
-		pos++;
-
-		sum /= BASE;
-	}while( (sum>0) && (pos < max_len) );
-
-	if( (pos == max_len) && (sum>0) )
-		return NULL;
-
-	str->data[pos] = '\0';
-	res = stringrev(str->data);
-
-	return res;
-}
-
 volatile bool do_exit = false;
 
 FILE* fd = NULL;
 volatile uint32_t byte_count = 0;
 
-bool signalsource = false;
-uint32_t amplitude = 0;
-
-bool receive = false;
-bool receive_wav = false;
-
-bool transmit = false;
-struct timeval time_start;
-struct timeval t_start;
-
-bool automatic_tuning = false;
-uint64_t freq_hz;
-
-bool if_freq = false;
-uint64_t if_freq_hz;
-
-bool lo_freq = false;
-uint64_t lo_freq_hz = DEFAULT_LO_HZ;
-
-bool image_reject = false;
-uint32_t image_reject_selection;
-
-bool amp = false;
-uint32_t amp_enable;
-
-bool antenna = false;
-uint32_t antenna_enable;
-
-bool sample_rate = false;
-uint32_t sample_rate_hz;
-
 bool limit_num_samples = false;
-uint64_t samples_to_xfer = 0;
 size_t bytes_to_xfer = 0;
 
-bool baseband_filter_bw = false;
-uint32_t baseband_filter_bw_hz = 0;
-
-bool repeat = false;
+struct timeval time_start;
+struct timeval t_start;
 
 volatile int thread_exit = 0;
 volatile int thread_done = 0;
@@ -481,7 +300,6 @@ static void* write_thread(void* arg) {
 
 int rx_callback(hackrf_transfer* transfer) {
 	size_t bytes_to_write;
-	int i;
 
 	if( fd != NULL )
 	{
@@ -494,115 +312,25 @@ int rx_callback(hackrf_transfer* transfer) {
 			}
 			bytes_to_xfer -= bytes_to_write;
 		}
-		if (receive_wav) {
-			/* convert .wav contents from signed to unsigned */
-			for (i = 0; i < bytes_to_write; i++) {
-				transfer->buffer[i] ^= (uint8_t)0x80;
-			}
-		}
-        if (0) {
-            ssize_t bytes_written = fwrite(transfer->buffer, 1, bytes_to_write, fd);
-            if ((bytes_written != bytes_to_write)
-				|| (limit_num_samples && (bytes_to_xfer == 0))) {
-                return -1;
-            } else {
-                return 0;
-            }
+
+        while ( (bytes_left = buf_add(transfer->buffer, bytes_to_write)) ) {
+            printf("Buffer full\n");
+        }
+
+        //Signal to writer
+        pthread_mutex_lock(&writer_mutex);
+        pthread_cond_signal(&cond);
+        pthread_mutex_unlock(&writer_mutex);
+
+        if ((bytes_left != 0)
+                || (limit_num_samples && (bytes_to_xfer == 0))) {
+            return -1;
         } else {
-            /*
-            struct timeval time_now, time_start;
-            float time_difference;
-            static float max_diff = 0;
-
-            gettimeofday(&time_now, NULL);
-            time_start = time_now;
-            */
-
-            while ( (bytes_left = buf_add(transfer->buffer, bytes_to_write)) ) {
-                printf("Buffer full\n");
-            }
-            //gettimeofday(&time_now, NULL);
-
-            //Signal to writer
-            pthread_mutex_lock(&writer_mutex);
-            pthread_cond_signal(&cond);
-            pthread_mutex_unlock(&writer_mutex);
-
-            /*
-            time_difference = TimevalDiff(&time_now, &time_start);
-            if (time_difference > max_diff) {
-                printf("%f %d\n", time_difference, (int)bytes_to_write);
-                max_diff = time_difference;
-            }
-            */
-            if ((bytes_left != 0)
-                    || (limit_num_samples && (bytes_to_xfer == 0))) {
-                return -1;
-            } else {
-                return 0;
-            }
+            return 0;
         }
 	} else {
 		return -1;
 	}
-}
-
-int tx_callback(hackrf_transfer* transfer) {
-	size_t bytes_to_read;
-	int i;
-
-	if( fd != NULL )
-	{
-		ssize_t bytes_read;
-		byte_count += transfer->valid_length;
-		bytes_to_read = transfer->valid_length;
-		if (limit_num_samples) {
-			if (bytes_to_read >= bytes_to_xfer) {
-				/*
-				 * In this condition, we probably tx some of the previous
-				 * buffer contents at the end.  :-(
-				 */
-				bytes_to_read = bytes_to_xfer;
-			}
-			bytes_to_xfer -= bytes_to_read;
-		}
-		bytes_read = fread(transfer->buffer, 1, bytes_to_read, fd);
-		if ((bytes_read != bytes_to_read)
-				|| (limit_num_samples && (bytes_to_xfer == 0))) {
-                       if (repeat) {
-                               printf("Input file end reached. Rewind to beginning.\n");
-                               rewind(fd);
-                               fread(transfer->buffer + bytes_read, 1, bytes_to_read - bytes_read, fd);
-			       return 0;
-                       } else {
-                               return -1; // not loopback mode, EOF
-                       }
-
-		} else {
-			return 0;
-		}
-	} else if (transceiver_mode == TRANSCEIVER_MODE_SS) {
-		/* Transmit continuous wave with specific amplitude */
-		byte_count += transfer->valid_length;
-		bytes_to_read = transfer->valid_length;
-		if (limit_num_samples) {
-			if (bytes_to_read >= bytes_to_xfer) {
-				bytes_to_read = bytes_to_xfer;
-			}
-			bytes_to_xfer -= bytes_to_read;
-		}
-
-		for(i = 0;i<bytes_to_read;i++)
-			transfer->buffer[i] = amplitude;
-
-		if (limit_num_samples && (bytes_to_xfer == 0)) {
-			return -1;
-		} else {
-			return 0;
-		}
-	} else {
-        return -1;
-    }
 }
 
 static void usage() {
@@ -630,7 +358,7 @@ sighandler(int signum)
 	return FALSE;
 }
 #else
-void sigint_callback_handler(int signum) 
+void sigint_callback_handler(int signum)
 {
 	fprintf(stdout, "Caught signal %d\n", signum);
 	do_exit = true;
@@ -643,9 +371,7 @@ void sigint_callback_handler(int signum)
 int main(int argc, char** argv) {
 	int opt;
 	const char* path = NULL;
-	const char* serial_number = NULL;
 	int result;
-	long int file_pos;
 	int exit_code = EXIT_SUCCESS;
 	struct timeval t_end;
 	float time_diff;
@@ -665,7 +391,6 @@ int main(int argc, char** argv) {
 		{
 
 		case 'r':
-			receive = true;
 			path = optarg;
 			break;
 
@@ -725,7 +450,7 @@ int main(int argc, char** argv) {
 	}
 
 
-    if( receive == false ) {
+    if( path == NULL) {
         printf("No filename given");
         usage();
         return EXIT_FAILURE;
@@ -744,33 +469,26 @@ int main(int argc, char** argv) {
 		return EXIT_FAILURE;
 	}
 
-	result = hackrf_open_by_serial(serial_number, &device);
+	result = hackrf_open_by_serial(NULL, &device);
 	if( result != HACKRF_SUCCESS ) {
 		printf("hackrf_open() failed: %s (%d)\n", hackrf_error_name(result), result);
 		usage();
 		return EXIT_FAILURE;
 	}
 
-	if (transceiver_mode != TRANSCEIVER_MODE_SS) {
-		if( transceiver_mode == TRANSCEIVER_MODE_RX )
-		{
-			fd = fopen(path, "wb");
-		} else {
-			fd = fopen(path, "rb");
-		}
+    fd = fopen(path, "wb");
+    if( fd == NULL ) {
+        printf("Failed to open file: %s\n", path);
+        return EXIT_FAILURE;
+    }
 
-		if( fd == NULL ) {
-			printf("Failed to open file: %s\n", path);
-			return EXIT_FAILURE;
-		}
-		/* Change fd buffer to have bigger one to store or read data on/to HDD */
-		result = setvbuf(fd , NULL , _IOFBF , FD_BUFFER_SIZE);
-		if( result != 0 ) {
-			printf("setvbuf() failed: %d\n", result);
-			usage();
-			return EXIT_FAILURE;
-		}
-	}
+    /* Change fd buffer to have bigger one to store or read data on/to HDD */
+    result = setvbuf(fd , NULL , _IOFBF , FD_BUFFER_SIZE);
+    if( result != 0 ) {
+        printf("setvbuf() failed: %d\n", result);
+        usage();
+        return EXIT_FAILURE;
+    }
 
     pthread_t writer;
     pthread_attr_t attr;
@@ -783,11 +501,6 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-	/* Write Wav header */
-	if( receive_wav )
-	{
-		fwrite(&wave_file_hdr, 1, sizeof(t_wav_file_hdr), fd);
-	}
 
 #ifdef _MSC_VER
 	SetConsoleCtrlHandler( (PHANDLER_ROUTINE) sighandler, TRUE );
@@ -800,18 +513,18 @@ int main(int argc, char** argv) {
 	signal(SIGABRT, &sigint_callback_handler);
 #endif
 
-    result = hackrf_set_mcp(device, 0);
+    result = hackrf_set_mcp(device, mcp_gain);
 	if( result != HACKRF_SUCCESS ) {
 		printf("hackrf_set_mcp() failed: %s (%d)\n", hackrf_error_name(result), result);
 		return EXIT_FAILURE;
 	}
-
 
     result = hackrf_set_sweep(device, f0, bw, tsweep, delay);
 	if( result != HACKRF_SUCCESS ) {
 		printf("hackrf_set_sweep() failed: %s (%d)\n", hackrf_error_name(result), result);
 		return EXIT_FAILURE;
 	}
+
     double sample_rate = 204e6/(2*clk_divider);
     result = hackrf_set_clock_divider(device, clk_divider);
     write_header(fd, sample_rate, f0, bw, tsweep, delay, 0);
@@ -819,15 +532,9 @@ int main(int argc, char** argv) {
     result = hackrf_start_rx(device, rx_callback, NULL);
 
 	if( result != HACKRF_SUCCESS ) {
-		printf("hackrf_start_?x() failed: %s (%d)\n", hackrf_error_name(result), result);
+		printf("hackrf_start_rx() failed: %s (%d)\n", hackrf_error_name(result), result);
 		usage();
 		return EXIT_FAILURE;
-	}
-
-	if( limit_num_samples ) {
-		printf("samples_to_xfer %s/%sMio\n",
-		u64toa(samples_to_xfer,&ascii_u64_data1),
-		u64toa((samples_to_xfer/FREQ_ONE_MHZ),&ascii_u64_data2) );
 	}
 
 	gettimeofday(&t_start, NULL);
@@ -875,15 +582,12 @@ int main(int argc, char** argv) {
 
 	if(device != NULL)
 	{
-		if( receive )
-		{
-			result = hackrf_stop_rx(device);
-			if( result != HACKRF_SUCCESS ) {
-				printf("hackrf_stop_rx() failed: %s (%d)\n", hackrf_error_name(result), result);
-			}else {
-				printf("hackrf_stop_rx() done\n");
-			}
-		}
+        result = hackrf_stop_rx(device);
+        if( result != HACKRF_SUCCESS ) {
+            printf("hackrf_stop_rx() failed: %s (%d)\n", hackrf_error_name(result), result);
+        }else {
+            printf("hackrf_stop_rx() done\n");
+        }
 
 		result = hackrf_close(device);
 		if( result != HACKRF_SUCCESS )
@@ -910,19 +614,6 @@ int main(int argc, char** argv) {
 
 	if(fd != NULL)
 	{
-		if( receive_wav )
-		{
-			/* Get size of file */
-			file_pos = ftell(fd);
-			/* Update Wav Header */
-			wave_file_hdr.hdr.size = file_pos-8;
-			wave_file_hdr.fmt_chunk.dwSamplesPerSec = sample_rate_hz;
-			wave_file_hdr.fmt_chunk.dwAvgBytesPerSec = wave_file_hdr.fmt_chunk.dwSamplesPerSec*2;
-			wave_file_hdr.data_chunk.chunkSize = file_pos - sizeof(t_wav_file_hdr);
-			/* Overwrite header with updated data */
-			rewind(fd);
-			fwrite(&wave_file_hdr, 1, sizeof(t_wav_file_hdr), fd);
-		}
 		fclose(fd);
 		fd = NULL;
 		printf("fclose(fd) done\n");
