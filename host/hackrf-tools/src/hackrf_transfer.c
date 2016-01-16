@@ -81,7 +81,7 @@ int gettimeofday(struct timeval *tv, void* ignored)
 
 #include <signal.h>
 
-#define FILE_VERSION (0)
+#define FILE_VERSION (1)
 
 #define FD_BUFFER_SIZE (8*1024)
 
@@ -432,11 +432,11 @@ bool repeat = false;
 volatile int thread_exit = 0;
 volatile int thread_done = 0;
 
-static void write_header(FILE *fd, double sample_rate, double f0, double bw, double tsweep, int flags) {
+static void write_header(FILE *fd, double sample_rate, double f0, double bw, double tsweep, int delay, int flags) {
     char magic[] = "FMCW";
     int version = FILE_VERSION;
-    //magic, version, header size, sample_rate, f0, bw, tsweep, flags
-    int header_length = 4+4+4+ 8+8+8+8+4;
+    //magic, version, header size, sample_rate, f0, bw, tsweep, delay, flags
+    int header_length = 4+4+4+ 8+8+8+8+4+4;
     fwrite(magic, 1, 4, fd);
     fwrite(&version, 4, 1, fd);
     fwrite(&header_length, 4, 1, fd);
@@ -444,6 +444,7 @@ static void write_header(FILE *fd, double sample_rate, double f0, double bw, dou
     fwrite(&f0, 8, 1, fd);
     fwrite(&bw, 8, 1, fd);
     fwrite(&tsweep, 8, 1, fd);
+    fwrite(&delay, 4, 1, fd);
     fwrite(&flags, 4, 1, fd);
 }
 
@@ -1001,8 +1002,9 @@ int main(int argc, char** argv) {
     double f0 = 5.6e9;
     double bw = 200e6;
     double tsweep = 1.0e-3;
+    int delay = 1800;
 
-    result = hackrf_set_sweep(device, f0, bw, tsweep);
+    result = hackrf_set_sweep(device, f0, bw, tsweep, delay);
 	if( result != HACKRF_SUCCESS ) {
 		printf("hackrf_set_sweep() failed: %s (%d)\n", hackrf_error_name(result), result);
 		return EXIT_FAILURE;
@@ -1010,7 +1012,7 @@ int main(int argc, char** argv) {
     int clk_divider = 20;
     double sample_rate = 204e6/(2*clk_divider);
     result = hackrf_set_clock_divider(device, clk_divider);
-    write_header(fd, sample_rate, f0, bw, tsweep, 0);
+    write_header(fd, sample_rate, f0, bw, tsweep, delay, 0);
 
     result = hackrf_start_rx(device, rx_callback, NULL);
 

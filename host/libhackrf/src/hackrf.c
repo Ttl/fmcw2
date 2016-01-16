@@ -702,7 +702,7 @@ int ADDCALL hackrf_set_transceiver_mode(hackrf_device* device, hackrf_transceive
 	}
 }
 
-int ADDCALL hackrf_set_sweep(hackrf_device* device, double fstart, double bw, double length) {
+int ADDCALL hackrf_set_sweep(hackrf_device* device, double fstart, double bw, double length, int delay) {
     unsigned int res = 0;
     unsigned int n = fstart/FPD_FREQ;
     unsigned int frac_msb = ((fstart/FPD_FREQ) -n)*(1 <<12);
@@ -764,10 +764,12 @@ int ADDCALL hackrf_set_sweep(hackrf_device* device, double fstart, double bw, do
         res |= hackrf_set_adf4158_reg("neg_bleed_current", 3);
     }
 
-    res |= hackrf_set_adf4158_reg("ramp_mode", 1); //Triangle
-    //res |= hackrf_set_adf4158_reg("ramp_del_fl", 1);
-    //res |= hackrf_set_adf4158_reg("ramp_del", 1);
-    //res |= hackrf_set_adf4158_reg("delay_start_divider", 500);
+    res |= hackrf_set_adf4158_reg("ramp_mode", 0); //Sawtooth
+    if (delay > 0) {
+        res |= hackrf_set_adf4158_reg("ramp_del_fl", 1);
+        res |= hackrf_set_adf4158_reg("ramp_del", 1);
+        res |= hackrf_set_adf4158_reg("delay_start_divider", delay);
+    }
     if (res) {
         return res;
     }

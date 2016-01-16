@@ -156,7 +156,7 @@ extern ADDAPI const char* ADDCALL hackrf_board_id_name(enum hackrf_board_id boar
 extern ADDAPI const char* ADDCALL hackrf_usb_board_id_name(enum hackrf_usb_board_id usb_board_id);
 extern ADDAPI const char* ADDCALL hackrf_filter_path_name(const enum rf_path_filter path);
 
-extern ADDAPI int ADDCALL hackrf_set_sweep(hackrf_device* device, double fstart, double bw, double length);
+extern ADDAPI int ADDCALL hackrf_set_sweep(hackrf_device* device, double fstart, double bw, double length, int delay);
 extern ADDAPI int ADDCALL hackrf_set_adf4158_reg(char *name, unsigned int value);
 extern ADDAPI int ADDCALL hackrf_adf4158_to_device(hackrf_device* device);
 extern ADDAPI int ADDCALL hackrf_set_mcp(hackrf_device* device, uint32_t value);
