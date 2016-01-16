@@ -607,32 +607,13 @@ int tx_callback(hackrf_transfer* transfer) {
 
 static void usage() {
 	printf("Usage:\n");
-	printf("\t[-d serial_number] # Serial number of desired HackRF.\n");
 	printf("\t-r <filename> # Receive data into file.\n");
-	printf("\t-t <filename> # Transmit data from file.\n");
-	printf("\t-w # Receive data into file with WAV header and automatic name.\n");
-	printf("\t   # This is for SDR# compatibility and may not work with other software.\n");
-	printf("\t[-f freq_hz] # Frequency in Hz [%sMHz to %sMHz].\n",
-		u64toa((FREQ_MIN_HZ/FREQ_ONE_MHZ),&ascii_u64_data1),
-		u64toa((FREQ_MAX_HZ/FREQ_ONE_MHZ),&ascii_u64_data2));
-	printf("\t[-i if_freq_hz] # Intermediate Frequency (IF) in Hz [%sMHz to %sMHz].\n",
-		u64toa((IF_MIN_HZ/FREQ_ONE_MHZ),&ascii_u64_data1),
-		u64toa((IF_MAX_HZ/FREQ_ONE_MHZ),&ascii_u64_data2));
-	printf("\t[-o lo_freq_hz] # Front-end Local Oscillator (LO) frequency in Hz [%sMHz to %sMHz].\n",
-		u64toa((LO_MIN_HZ/FREQ_ONE_MHZ),&ascii_u64_data1),
-		u64toa((LO_MAX_HZ/FREQ_ONE_MHZ),&ascii_u64_data2));
-	printf("\t[-m image_reject] # Image rejection filter selection, 0=bypass, 1=low pass, 2=high pass.\n");
-	printf("\t[-a amp_enable] # RX/TX RF amplifier 1=Enable, 0=Disable.\n");
-	printf("\t[-p antenna_enable] # Antenna port power, 1=Enable, 0=Disable.\n");
-	printf("\t[-l gain_db] # RX LNA (IF) gain, 0-40dB, 8dB steps\n");
-	printf("\t[-g gain_db] # RX VGA (baseband) gain, 0-62dB, 2dB steps\n");
-	printf("\t[-x gain_db] # TX VGA (IF) gain, 0-47dB, 1dB steps\n");
-	printf("\t[-s sample_rate_hz] # Sample rate in Hz (8/10/12.5/16/20MHz, default %sMHz).\n",
-		u64toa((DEFAULT_SAMPLE_RATE_HZ/FREQ_ONE_MHZ),&ascii_u64_data1));
-	printf("\t[-n num_samples] # Number of samples to transfer (default is unlimited).\n");
-	printf("\t[-c amplitude] # CW signal source mode, amplitude 0-127 (DC value to DAC).\n");
-        printf("\t[-R] # Repeat TX mode (default is off) \n");
-	printf("\t[-b baseband_filter_bw_hz] # Set baseband filter bandwidth in MHz.\n\tPossible values: 1.75/2.5/3.5/5/5.5/6/7/8/9/10/12/14/15/20/24/28MHz, default < sample_rate_hz.\n" );
+	printf("\t[-f freq_hz] # Sweep start frequency in Hz.\n");
+	printf("\t[-b freq_hz] # Sweep bandwidth in Hz.\n");
+	printf("\t[-t seconds] # Sweep length in seconds\n");
+	printf("\t[-g 0<=x<=63] # MCP4022 gain setting.\n");
+	printf("\t[-c x] # ADC clock divider. ADC clock = 204e6/(2*x).\n");
+	printf("\t[-d clks] # Sweep delay in refernce clock cycles (Default 30 MHz)\n");
 }
 
 static hackrf_device* device = NULL;
@@ -661,267 +642,93 @@ void sigint_callback_handler(int signum)
 
 int main(int argc, char** argv) {
 	int opt;
-	char path_file[PATH_FILE_MAX_LEN];
-	char date_time[DATE_TIME_MAX_LEN];
 	const char* path = NULL;
 	const char* serial_number = NULL;
 	int result;
-	time_t rawtime;
-	struct tm * timeinfo;
 	long int file_pos;
 	int exit_code = EXIT_SUCCESS;
 	struct timeval t_end;
 	float time_diff;
-	unsigned int lna_gain=8, vga_gain=20, txvga_gain=0;
-  
-	while( (opt = getopt(argc, argv, "wr:t:f:i:o:m:a:p:s:n:b:l:g:x:c:d:R")) != EOF )
+
+    /* Default parameters */
+    double f0 = 5.6e9;
+    double bw = 200e6;
+    double tsweep = 1.0e-3;
+    int delay = 1800;
+    int mcp_gain = 0;
+    int clk_divider = 20;
+
+	while( (opt = getopt(argc, argv, "b:d:f:t:r:g:c:")) != EOF )
 	{
 		result = HACKRF_SUCCESS;
-		switch( opt ) 
+		switch( opt )
 		{
-		case 'w':
-			receive_wav = true;
-			break;
-		
+
 		case 'r':
 			receive = true;
 			path = optarg;
 			break;
-		
-		case 't':
-			transmit = true;
-			path = optarg;
-			break;
 
-		case 'd':
-			serial_number = optarg;
+		case 'b':
+			bw = atof(optarg);
+            if (bw <= 0) {
+                result = HACKRF_ERROR_INVALID_PARAM;
+            }
 			break;
 
 		case 'f':
-			automatic_tuning = true;
-			result = parse_u64(optarg, &freq_hz);
+			f0 = atof(optarg);
+            if (f0 <= 0) {
+                result = HACKRF_ERROR_INVALID_PARAM;
+            }
 			break;
 
-		case 'i':
-			if_freq = true;
-			result = parse_u64(optarg, &if_freq_hz);
+		case 't':
+			tsweep = atof(optarg);
+            if (tsweep < 0) {
+                result = HACKRF_ERROR_INVALID_PARAM;
+            }
 			break;
 
-		case 'o':
-			lo_freq = true;
-			result = parse_u64(optarg, &lo_freq_hz);
-			break;
-
-		case 'm':
-			image_reject = true;
-			result = parse_u32(optarg, &image_reject_selection);
-			break;
-
-		case 'a':
-			amp = true;
-			result = parse_u32(optarg, &amp_enable);
-			break;
-
-		case 'p':
-			antenna = true;
-			result = parse_u32(optarg, &antenna_enable);
-			break;
-
-		case 'l':
-			result = parse_u32(optarg, &lna_gain);
+		case 'd':
+            delay = (int)strtol(optarg, (char **)NULL, 10);
+            if (delay < 0) {
+                result = HACKRF_ERROR_INVALID_PARAM;
+            }
 			break;
 
 		case 'g':
-			result = parse_u32(optarg, &vga_gain);
-			break;
-
-		case 'x':
-			result = parse_u32(optarg, &txvga_gain);
-			break;
-
-		case 's':
-			sample_rate = true;
-			result = parse_u32(optarg, &sample_rate_hz);
-			break;
-
-		case 'n':
-			limit_num_samples = true;
-			result = parse_u64(optarg, &samples_to_xfer);
-			bytes_to_xfer = samples_to_xfer * 2ull;
-			break;
-
-		case 'b':
-			baseband_filter_bw = true;
-			result = parse_u32(optarg, &baseband_filter_bw_hz);
+            mcp_gain = (int)strtol(optarg, (char **)NULL, 10);
+            if (mcp_gain < 0 || mcp_gain > 63) {
+                result = HACKRF_ERROR_INVALID_PARAM;
+            }
 			break;
 
 		case 'c':
-			transmit = true;
-			signalsource = true;
-			result = parse_u32(optarg, &amplitude);
+            clk_divider = (int)strtol(optarg, (char **)NULL, 10);
+            if (clk_divider <= 0) {
+                result = HACKRF_ERROR_INVALID_PARAM;
+            }
 			break;
-
-                case 'R':
-                        repeat = true;
-                        break;
 
 		default:
 			printf("unknown argument '-%c %s'\n", opt, optarg);
 			usage();
 			return EXIT_FAILURE;
 		}
-		
+
 		if( result != HACKRF_SUCCESS ) {
 			printf("argument error: '-%c %s' %s (%d)\n", opt, optarg, hackrf_error_name(result), result);
 			usage();
 			return EXIT_FAILURE;
-		}		
-	}
-
-	if (lna_gain % 8)
-		printf("warning: lna_gain (-l) must be a multiple of 8\n");
-
-	if (vga_gain % 2)
-		printf("warning: vga_gain (-g) must be a multiple of 2\n");
-
-	if (samples_to_xfer >= SAMPLES_TO_XFER_MAX) {
-		printf("argument error: num_samples must be less than %s/%sMio\n",
-			u64toa(SAMPLES_TO_XFER_MAX,&ascii_u64_data1),
-			u64toa((SAMPLES_TO_XFER_MAX/FREQ_ONE_MHZ),&ascii_u64_data2));
-		usage();
-		return EXIT_FAILURE;
-	}
-
-	if (if_freq || lo_freq || image_reject) {
-		/* explicit tuning selected */
-		if (!if_freq) {
-			printf("argument error: if_freq_hz must be specified for explicit tuning.\n");
-			usage();
-			return EXIT_FAILURE;
-		}
-		if (!image_reject) {
-			printf("argument error: image_reject must be specified for explicit tuning.\n");
-			usage();
-			return EXIT_FAILURE;
-		}
-		if (!lo_freq && (image_reject_selection != RF_PATH_FILTER_BYPASS)) {
-			printf("argument error: lo_freq_hz must be specified for explicit tuning unless image_reject is set to bypass.\n");
-			usage();
-			return EXIT_FAILURE;
-		}
-		if ((if_freq_hz > IF_MAX_HZ) || (if_freq_hz < IF_MIN_HZ)) {
-			printf("argument error: if_freq_hz shall be between %s and %s.\n",
-				u64toa(IF_MIN_HZ,&ascii_u64_data1),
-				u64toa(IF_MAX_HZ,&ascii_u64_data2));
-			usage();
-			return EXIT_FAILURE;
-		}
-		if ((lo_freq_hz > LO_MAX_HZ) || (lo_freq_hz < LO_MIN_HZ)) {
-			printf("argument error: lo_freq_hz shall be between %s and %s.\n",
-				u64toa(LO_MIN_HZ,&ascii_u64_data1),
-				u64toa(LO_MAX_HZ,&ascii_u64_data2));
-			usage();
-			return EXIT_FAILURE;
-		}
-		if (image_reject_selection > 2) {
-			printf("argument error: image_reject must be 0, 1, or 2 .\n");
-			usage();
-			return EXIT_FAILURE;
-		}
-		if (automatic_tuning) {
-			printf("warning: freq_hz ignored by explicit tuning selection.\n");
-			automatic_tuning = false;
-		}
-		switch (image_reject_selection) {
-		case RF_PATH_FILTER_BYPASS:
-			freq_hz = if_freq_hz;
-			break;
-		case RF_PATH_FILTER_LOW_PASS:
-			freq_hz = abs(if_freq_hz - lo_freq_hz);
-			break;
-		case RF_PATH_FILTER_HIGH_PASS:
-			freq_hz = if_freq_hz + lo_freq_hz;
-			break;
-		default:
-			freq_hz = DEFAULT_FREQ_HZ;
-			break;
-		}
-		printf("explicit tuning specified for %s Hz.\n",
-			u64toa(freq_hz,&ascii_u64_data1));
-
-	} else if (automatic_tuning) {
-		if( (freq_hz > FREQ_MAX_HZ) || (freq_hz < FREQ_MIN_HZ) )
-		{
-			printf("argument error: freq_hz shall be between %s and %s.\n",
-				u64toa(FREQ_MIN_HZ,&ascii_u64_data1),
-				u64toa(FREQ_MAX_HZ,&ascii_u64_data2));
-			usage();
-			return EXIT_FAILURE;
-		}
-	} else {
-		/* Use default freq */
-		freq_hz = DEFAULT_FREQ_HZ;
-		automatic_tuning = true;
-	}
-
-	if( sample_rate == false )
-	{
-		sample_rate_hz = DEFAULT_SAMPLE_RATE_HZ;
-	}
-
-	if( (transmit == false) && (receive == receive_wav) )
-	{
-		printf("receive -r and receive_wav -w options are mutually exclusive\n");
-		usage();
-		return EXIT_FAILURE;
-	}
-
-	if( receive_wav == false )
-	{
-		if( transmit == receive ) 
-		{
-			if( transmit == true ) 
-			{
-				printf("receive -r and transmit -t options are mutually exclusive\n");
-			} else
-			{
-				printf("specify either transmit -t or receive -r or receive_wav -w option\n");
-			}
-			usage();
-			return EXIT_FAILURE;
 		}
 	}
 
-    transceiver_mode = TRANSCEIVER_MODE_RX;
 
-	if (signalsource) {
-		transceiver_mode = TRANSCEIVER_MODE_SS;
-		if (amplitude >127) {
-			printf("argument error: amplitude shall be in between 0 and 128.\n");
-			usage();
-			return EXIT_FAILURE;
-		}
-	}
-
-	if( receive_wav )
-	{
-		time (&rawtime);
-		timeinfo = localtime (&rawtime);
-		transceiver_mode = TRANSCEIVER_MODE_RX;
-		/* File format HackRF Year(2013), Month(11), Day(28), Hour Min Sec+Z, Freq kHz, IQ.wav */
-		strftime(date_time, DATE_TIME_MAX_LEN, "%Y%m%d_%H%M%S", timeinfo);
-		snprintf(path_file, PATH_FILE_MAX_LEN, "HackRF_%sZ_%ukHz_IQ.wav", date_time, (uint32_t)(freq_hz/(1000ull)) );
-		path = path_file;
-		printf("Receive wav file: %s\n", path);
-	}
-
-	// In signal source mode, the PATH argument is neglected.
-	if (transceiver_mode != TRANSCEIVER_MODE_SS) {
-		if( path == NULL ) {
-			printf("specify a path to a file to transmit/receive\n");
-			usage();
-			return EXIT_FAILURE;
-		}
+    if( receive == false ) {
+        printf("No filename given");
+        usage();
+        return EXIT_FAILURE;
 	}
 
     //Create thread for writing to file
@@ -929,7 +736,6 @@ int main(int argc, char** argv) {
         printf("buf_init failed\n");
         return -1;
     }
-
 
 	result = hackrf_init();
 	if( result != HACKRF_SUCCESS ) {
@@ -999,17 +805,13 @@ int main(int argc, char** argv) {
 		printf("hackrf_set_mcp() failed: %s (%d)\n", hackrf_error_name(result), result);
 		return EXIT_FAILURE;
 	}
-    double f0 = 5.6e9;
-    double bw = 200e6;
-    double tsweep = 1.0e-3;
-    int delay = 1800;
+
 
     result = hackrf_set_sweep(device, f0, bw, tsweep, delay);
 	if( result != HACKRF_SUCCESS ) {
 		printf("hackrf_set_sweep() failed: %s (%d)\n", hackrf_error_name(result), result);
 		return EXIT_FAILURE;
 	}
-    int clk_divider = 20;
     double sample_rate = 204e6/(2*clk_divider);
     result = hackrf_set_clock_divider(device, clk_divider);
     write_header(fd, sample_rate, f0, bw, tsweep, delay, 0);
