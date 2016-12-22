@@ -14,7 +14,7 @@ decimate_sweeps = 10
 end = start+decimate_sweeps*1090
 bit_depth = 2**10
 decimate_samples = 8
-bb_filter = 'sar/bb_filter.txt'
+bb_filter = None
 
 bw = 200e6
 sweep_length = 1.0e-3
